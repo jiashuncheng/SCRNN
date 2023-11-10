@@ -1,156 +1,43 @@
-# __PySNN__
+# SpikeTorch
 
-[![Build Status](https://travis-ci.com/BasBuller/PySNN.svg?branch=master)](https://travis-ci.com/BasBuller/PySNN)
-[![codecov.io](https://codecov.io/gh/BasBuller/PySNN/coverage.svg?branch=master)](https://codecov.io/gh/BasBuller/PySNN)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Python package used for simulating spiking neural networks (SNNs) in [PyTorch](http://pytorch.org/).
 
-Spiking neural network (SNN) framework written on top of PyTorch for efficient simulation of SNNs both on _**CPU**_ and _**GPU**_. The framework is intended for with correlation based learning methods. The library adheres to the highly modular and dynamic design of PyTorch, and does not require its user to learn a new framework. 
+At the moment, the focus is on replicating the SNN described in [Unsupervised learning of digit recognition using spike-timing-dependent plasticity](https://www.frontiersin.org/articles/10.3389/fncom.2015.00099/full#) (original code found [here](https://github.com/peter-u-diehl/stdp-mnist), extensions thereof found in my previous project repository [here](https://github.com/djsaunde/stdp-mnist)).
 
-*This framework's power lies in the ease of defining and mixing new Neuron and Connection objects that seamlessly work together, even different versions, in a single network.*
+We are currently interested in applying SNNs to simple machine learning (ML) tasks, but the code can be used for any purpose.
 
-PySNN is designed to mostly provide low level objects to its user that can be combined and mixed, just as in PyTorch. The biggest difference is that a network now consists of two types of modules, instead of the single nn.Module in regular PyTorch. These new modules are the pysnn.Neuron and pysnn.Connection.
+## Requirements
 
-Documentation can be found at: [https://basbuller.github.io/PySNN/](https://basbuller.github.io/PySNN/)
+All code was developed using Python 3.6.x, and will fail if run with Python 2.x. Use `pip install -r requirements.txt` to download all project dependencies. You may have to consult the [PyTorch webpage](http://pytorch.org/) in order to get the right installation for your machine. 
 
-Design of the PySNN framework took inspiration from the following two libraries:
-* [BindsNET](https://github.com/Hananel-Hazan/bindsnet)
-* [cuSNN](https://github.com/tudelft/cuSNN) 
+## Setting things up
 
-## __Installation__
+To begin, download and unzip the MNIST dataset by running `./data/get_MNIST.sh`. To build the `spiketorch` package from source, change directory to the top level of this project and issue `pip install .` (PyPI support *hopefully* coming soon). After making changing to code in the `spiketorch` directory, issue `pip install . -U` or `pip install . --upgrade` at the top level of the project.
 
-Installation can be done with pip:
+To replicate the SNN from the [above paper](https://www.frontiersin.org/articles/10.3389/fncom.2015.00099/full#), run `python examples/eth.py`. There are a number of optional command-line arguments which can be passed in, including `--plot` (displays useful monitoring figures), `--n_neurons [int]` (number of excitatory, inhibitory neurons simulated), `--mode ['train' | 'test']` (sets network operation to the training or testing phase), and more. Run `python code/eth.py --help` for more information on the command-line arguments.
 
-```bash
-$ pip install pysnn
-```
+__Note__: This is a work in progress, including the replication script `examples/eth.py` and other modifications in `examples/`.
 
-If you want to make updates to the library without having to reinstall it, use the following install command instead:
+## Background
 
-```bash
-$ git clone https://github.com/BasBuller/PySNN.git
-$ cd PySNN/
-$ pip install -e .
-```
+One computational challenge is simulating time-dependent neuronal dynamics. This is typically done by solving ordinary differential equations (ODEs) which describe said dynamics. PyTorch does not explicitly support the solution of differential equations (as opposed to [`brian2`](https://github.com/brian-team/brian2), for example), but we can convert the ODEs defining the dynamics into difference equations and solve them at regular, short intervals (a `dt` on the order of 1 millisecond) as an approximation. Of course, under the hood, packages like `brian2` are doing the same thing. Doing this in [`PyTorch`](http://pytorch.org/) is exciting for a few reasons:
 
-Some examples need additional libraries. To install these, run:
+1. We can use the powerful and flexible [`torch.Tensor`](http://pytorch.org/) object, a wrapper around the [`numpy.ndarray`](https://docs.scipy.org/doc/numpy-1.13.0/reference/generated/numpy.ndarray.html) which can be transferred to and from GPU devices.
 
-```bash
-$ pip install pysnn[examples]
-```
+2. We can avoid "reinventing the wheel" by repurposing functions from the [`torch.nn.functional`](http://pytorch.org/docs/master/nn.html#torch-nn-functional) PyTorch submodule in our SNN architectures; e.g., convolution or pooling functions.
 
-Code is formatted with [Black](https://github.com/psf/black) using a pre-commit hook. To configure it, run:
+The concept that the neuron spike ordering and their relative timing encode information is a central theme in neuroscience. [Markram et al. (1997)](http://www.caam.rice.edu/~caam415/lec_gab/g4/markram_etal98.pdf) proposed that synapses between neurons should strengthen or degrade based on this relative timing, and prior to that, [Donald Hebb](https://en.wikipedia.org/wiki/Donald_O._Hebb) proposed the theory of Hebbian learning, often simply stated as "Neurons that fire together wire together." Markram et al.'s extension of the Hebbian theory is known as spike-timing-dependent plasticity (STDP).
 
-```bash
-$ pre-commit install
-```
+We are interested in applying SNNs to machine learning problems. We use STDP to modify weights of synapses connecting pairs or populations of neurons in SNNs. In the context of ML, we want to learn a setting of synapse weights which will generate appropriate data-dependent spiking activity in SNNs. This activity will allow us to subsequently perform some ML task of interest; e.g., discriminating or clustering input data.
 
-### Requirements
-Installing PySNN requires a Python version of 3.6 or higher, Python 2 is not supported. It also requires PyTorch to be of version 1.2 or higher.
+For now, we use the [MNIST handwritten digit dataset](http://yann.lecun.com/exdb/mnist/), which, though somewhat antiquated, is simple enough to develop new machine learning techniques on. The goal is to find a setting of synapse weights which will allow us to discriminate categories of input data. Based on historical spiking activity on training examples, we assign each neuron in an excitatory population an input category and subsequently classify test data based on these assignments.
 
-## __Network Structure__
+## Contributors
 
-Intention is to mirror most of the structure of PyTorch framework. As an example, the followig piece of code shows how much a Spiking Neural Network definition in PySNN looks like a network definition in PyTorch. The network's graph is cyclical, due to the feedback connection from the output neurons to the hidden neurons.
+- Daniel Saunders ([email](mailto:djsaunde@cs.umass.com) | [webpage](https://djsaunde.github.io))
 
-```python
-class Network(SNNNetwork):
-    def __init__(self):
-        super(Network, self).__init__()
+- Hananel Hazan ([email](mailto:hhazan@cs.umass.edu))
 
-        # Input
-        self.input = Input((batch_size, 1, n_in), *input_dynamics)
+- Darpan Sanghavi ([email](mailto:dsanghavi@cs.umass.edu))
 
-        # Layer 1
-        self.mlp1_c = Linear(n_in, n_hidden, *connection_dynamics)
-        self.neuron1 = LIFNeuron((batch_size, 1, n_hidden), *neuron_dynamics)
-        self.add_layer("fc1", self.mlp1_c, self.neuron1)
-
-        # Layer 2
-        self.mlp2_c = Linear(n_hidden, n_out, *connection_dynamics)
-        self.neuron2 = LIFNeuron((batch_size, 1, n_out), *neuron_dynamics)
-        self.add_layer("fc2", self.mlp2_c, self.neuron2)
-
-        # Feedback connection from neuron 2 to neuron 1
-        self.mlp2_prev = Linear(n_out, n_hidden, *c_dynamics)
-        self.add_layer("fc2_back", self.mlp2_prev, self.neuron1)
-
-    def forward(self, input):
-        spikes, trace = self.input(input)
-
-        # Layer 1
-        x_prev, _ = self.mlp2_prev(self.neuron2.spikes, self.neuron2.trace)
-        x_forw, _ = self.mlp1_c(x, t)
-        x, t = self.neuron1([x_forw, x_rec, x_prev])
-
-        # Layer out
-        spikes, trace = self.mlp2_c(spikes, trace)
-        spikes, trace = self.neuron2(spikes, trace)
-
-        return x
-```
-
-## Contributing
-
-Any help, suggestions, or additions to PySNN are greatly appreciated! Feel free to make pull request or start a chat about the library. In case of making a pull request, please do have a look at the contribution guidelines.
-
-## __Network Definition__
-
-The overall structure of a network definition is the same as in PyTorch where possible. All newly defined object inherit from the nn.Module class. The biggest differences are as follows:
-
-- Each layer consists out of a Connection and a Neuron object because they both implement different time based dynamics.
-- Training does not use gradients.
-- Neurons have a state that persists between consecutive timesteps.
-- Networks inherit from a special pysnn.SNNNetwork class.
-
-## __Neurons__
-
-This object is the main difference with ANNs. Neurons have highly non-linear (and also non-differentiable) behaviour. They have an internal voltage, once that surpasses a threshold value it generates a binary spike (non-differentiable operation) which is then propagated to the following layer of Neurons through a Connection object. Defining a new Neuron class is rather simple, one only has to define new neuronal dynamics functions for the Neuron's voltage and trace. The supporting functions are (almost) all defined in the Neuron base class.
-
-For an introduction to (biological) neuronal dynamics, and spiking neural networks the reader is referred to [Neuronal Dynamics](https://neuronaldynamics.epfl.ch/online/index.html) by Wulfram Gerstner, Werner M. Kistler, Richard Naud and Liam Paninski.
-
-## __Connections__
-
-It contains connection weights and routes signals between different layers. It only really differs with PyTorch layers in the fact that it has a state between iterations of its past activity, and the possibility of delaying signal transmission between layers.
-
-### __Connection Shapes__
-
-In order to keep track of traces and delays in information passing tensors an extra dimension is needed compared to the PyTorch conventions. 
-Due to the addition of spike traces, each spiking tensor contains an extra trace dimension as the last dimension. The resulting dimension ordering is as follows for an image tensor (trace is indicated as R to not be confused with time for video data):
-
-    [batch size, channels, height, width, traces] (B,C,H,W,R)
-
-For fully connected layers the resulting tensor is as follows (free dimension can be used the same as in PyTorch):
-
-    [batch size, free dimension, input elements, traces] (B,F,I,R)
-
-Currently, no explicit 3D convolution is possible like is common within video-processing. Luckily, SNNs have a built-in temporal dimension and are (currently still theoretically) well suited for processing videos event by event, and thus not needing 3D convolution.
-
-## __Traces__
-
-Traces are stored both in the Neuron and Connection objects. Currently, Connection objects takes traces from their pre-synaptic Neurons and propagate the trace over time, meaning it does not do any further processing on the traces. If it is desired, one can implement separate trace processing in a custom Connection object.
-
-Traces are stored in a tensor in each Connection, as well as the delay for each trace propagating through the Connection. Only one trace (or signal) can tracked through each synapse. In case delay times through a synapse become very long (longer than the refractory period of the pre-synaptic cell) it is possible for a new signal to enter the Connection before the previous one has travelled through it. In the current implementation the old signal will be overwritten, meaning the information is lost before it can be used!
-
-    It is up to the user to assure refractory periods are just as long or longer than the synaptic delay in the following Connection!
-
-## __Module definitions__
-
-Make sure each module has a self.reset_state() method! It is called from the SNNNetwork class and is needed for proper simulation of multiple
-inputs.
-
-<!-- ## __To do__
-
-- Determine performance of the functions in pysnn.functional, they return the difference and using inplace operations in the Module that is
-  calling the functional might provide better performance.
-- Allow for having a local copy of a cell's entire trace history. Possibly also extending this to Connection objects. This will result in a large increase in memory usage.
-- Change from using .uint8 to .bool datatypes with the introduction of PyTorch 1.2.
-
-### __Learning rules__
-
-- Adjust learning rule such that it is able to select which weights are learnable and which are not. 
-- Adjust layer class such that the parameter __training__ is also used within a learning rule. Just make sure gradients are always turned off since those are not needed...
-- Add support for convolutional Connections.
-
-### __Connection classes__
-
-- For connection class, make sure it can handle the transmission of multiple spike within the same synapse? -->
+- Hassaan Khan ([email](mailto:hqkhan@umass.edu))

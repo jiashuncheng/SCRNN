@@ -1,36 +1,84 @@
-# Contributing Guidelines
+# Contributing Protocol
 
-Contributing to PySNN follows the standard protocol:
-1. Clone the PySNN repository
-2. Make changes on a separate development branch
-3. Push the branch to the remote repository
-4. Open a new pull request
-5. The pull request is reviewed by one of the maintainers
+To clone this project locally, issue
 
-## Setup development branch
+```
+git clone https://github.com/djsaunde/spiketorch.git  # clones GitHub repository into directory "spiketorch"
+```
 
-Clone the PySNN library to your local machine using the following command:
+in the directory of your choice. This will place the repository's code in a directory titled `spiketorch`.
 
-    git clone https://github.com/BasBuller/PySNN.git
+All development should take place on a branch separate from master. To create a branch, issue
 
-## Make your changes
+```
+git branch [branch-name]  # create new branch
+```
 
-Your changes should contain logically grouped commits, with each commit containing work on a single subject. Add clear and concise comments that describe the code. In case a new function or class is added also add a docstring that is formatted in __ReStructuredText__ (rst).
+replacing `[branch-name]` with a simple and memorable name of choice; e.g., `git branch dan`. Switch to the newly created branch using
 
-## Push the branch to the remote
+```
+git checkout [branch-name]  # switch to a different branch of the repository
+```
 
-Before pushing your changes to the remote, make sure your commits are as clean as possible. Also, be sure to update your working branch to match the latest master branch. This can by done by rebasing your changes on the master branch by using the following command (while working on your development branch):
+__Note__: Issue `git branch` with no arguments to list all branches currently being tracked, with an asterisk next to the currently used branch; e.g.,
 
-    git pull --rebase origin master
+```
+$ git branch  # list all branches and indicate current branch
+* dan
+  devel
+  hananel
+  master
+```
 
-Next, push to the remote repository with the following command:
+If new branches have been created on the remote repository, you may start tracking them with ```git pull --all```, and check them out using ```git checkout [branch-name]```, as before. ```git branch -a``` will list all locally tracked branches, and well as list all remote branches (which can be checked out!).
 
-    git push origin [branch name]
+After making changes to the repository, issue a `git status` command to see which files have been modified. Then, use
 
-## Open a pull request
+```
+git add [file-name(s) | -A]  # add modified or newly created files
+```
 
-Lastly, open a new pull request on the github webpage. Please add a short description of the intention behind the request. If you want a specific reviewer to look at your code, please request so at in the panel on the right when making the pull request.
+to add one or more modified files (`file-name(s)`), or all modified files (`-A` or `--all`). These include newly created files. Issue
 
-## Wrapping up
+```
+git commit -m "[commit-message]"  # Useful messages help when reverting / searching through history 
+```
 
-Once the reviewer is done, your pull request will be merged if everything is looking good. Otherwise, the reviewer will request the kind of changes he/she would like to see. Once the updates are in place, the pull request can be updated.
+to "commit" your changes to your local repository, where `[commit-message]` is a _short yet descriptive_ note about what changes have been made.
+
+Before pushing your changes to the remote repository, you must make sure that you have an up-to-date version of the `master` code. That is, if master has been updated while you have been making your changes, your code will be out of date with respect to the master branch. Issue
+
+```
+git pull  # gets all changes from remote repository
+git merge master  # merges changes made in master branch with those made in your branch
+```
+
+and fix any merge conflicts that may have resulted, and re-commit after the fix with
+
+```
+git commit  # no -m message needed; merge messages are auto-generated
+```
+
+Push your changes back to the repository onto the same branch you are developing on. Issue
+
+```
+git push [origin] [branch-name]  # verbose; depends on push.default behavior settings
+```
+
+or,
+
+```
+git push  # concise; again, depends on push.default behavior
+```
+
+where `[origin]` is the name of the remote repository, and `[branch-name]` is the name of the branch you have developed on.
+
+__Note__: See (push.default)[https://git-scm.com/docs/git-config#git-config-pushdefault] for more information.
+
+To merge your changes into the `master` branch (the definitive version of the project's code), open a pull request on the [webpage](https://github.com/djsaunde/spiketorch) of the project. You can select the `base` branch (typically `master`, to merge changes _into_ the definitive version of the code) and the `compare` branch (say, `dan`, if I added a new feature locally and want to add it to the project code). You may add an optional extended description of your pull request changes. If there are merge conflicts at this stage, you may fix these using GitHub's pull request review interface.
+
+Assign reviewer(s) from the group of project contributors to perform a code review of your pull request. If the reviewer(s) are happy with your changes, you may then merge it in to the `master` branch. _Code review is crucial for the development of this project_, as the whole team should be held accountable for all changes.
+
+Here's a schematic of the process for submitting a pull request to the master branch of the GitHub repository:
+
+![GitHub pull request](images/contrib.png)
