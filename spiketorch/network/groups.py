@@ -48,7 +48,7 @@ class InputGroup(Group):
 			# Decay spike traces.
 			self.x -= dt * self.trace_tc * self.x
 
-		self.s = inpts
+		self.s = inpts.bool()
 
 		if self.traces:
 			# Setting synaptic traces.

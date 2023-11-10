@@ -5,7 +5,7 @@ import pickle as p
 
 from struct import unpack
 
-data_path = os.path.expanduser(os.path.join('~', 'code', 'spiketorch', 'data'))
+data_path = os.path.abspath(os.path.join('data'))
 
 if not os.path.isdir(data_path):
 	os.makedirs(data_path)

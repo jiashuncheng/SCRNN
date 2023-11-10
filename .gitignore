@@ -18,3 +18,8 @@ dist/
 */runs/
 
 # Files
+data/
+*.npy
+*log
+log*
+performances/
