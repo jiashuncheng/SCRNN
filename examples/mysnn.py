@@ -4,19 +4,21 @@ import torch
 import logging
 import argparse
 import numpy as np
-import pickle as p
+import pickle
 import pandas as pd
 
 from struct import unpack
 from datetime import datetime
 from torchvision import datasets
 
-sys.path.append(os.path.abspath(os.path.join('spiketorch')))
-sys.path.append(os.path.abspath(os.path.join('spiketorch', 'network')))
+import matplotlib.pyplot as plt
 
-from network import *
-from plotting import *
-from classification import *
+sys.path.insert(0,'{}'.format(os.path.abspath(os.path.join(os.path.dirname(__file__), "../spiketorch"))))
+
+from network import Network
+from network import save_params, load_params, save_assignments, load_assignments, get_square_weights
+from plotting import plot_input, plot_spikes, plot_weights, plot_performance
+from classification import classify, assign_labels
 
 from monitors import Monitor
 from synapses import Synapses, STDPSynapses
@@ -47,9 +49,10 @@ parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--mode', type=str, default='train')
 parser.add_argument('--n_input', type=int, default=784)
 parser.add_argument('--n_neurons', type=int, default=100)
+parser.add_argument('--n_output', type=int, default=10)
 parser.add_argument('--n_train', type=int, default=100)
 parser.add_argument('--n_test', type=int, default=10)
-parser.add_argument('--update_interval', type=int, default=250)
+parser.add_argument('--update_interval', type=int, default=10)
 parser.add_argument('--print_interval', type=int, default=10)
 parser.add_argument('--nu_pre', type=float, default=1e-4)
 parser.add_argument('--nu_post', type=float, default=1e-2)
@@ -60,29 +63,31 @@ parser.add_argument('--rest', type=int, default=150)
 parser.add_argument('--trace_tc', type=int, default=5e-2)
 parser.add_argument('--wmax', type=float, default=1.0)
 parser.add_argument('--dt', type=float, default=1)
-parser.add_argument('--gpu', type=str, default='False')
+parser.add_argument('--gpu', type=str, default='True')
 parser.add_argument('--plot', type=str, default='False')
 
 # Place parsed arguments in local scope.
 args = parser.parse_args()
-args = vars(args)
-locals().update(args)
 
 # Convert string arguments into boolean datatype.
-plot = plot == 'True'
-gpu = gpu == 'True'
+plot = args.plot == 'True'
+gpu = args.gpu == 'True'
 
 if gpu:
 	torch.set_default_tensor_type('torch.cuda.FloatTensor')
+	assert torch.cuda.is_available()
+	device = torch.device("cuda:0")
+else:
+	device = torch.device("cpu")
 
 # Set random number generator.
-np.random.seed(seed)
+np.random.seed(args.seed)
 
 # Record decaying spike traces to use STDP.
-traces = mode == 'train'
+traces = args.mode == 'train'
 
 # Build filename from command-line arguments.
-fname = '_'.join([ str(n_neurons), str(n_train), str(seed), str(c_inhib), str(c_excite), str(wmax) ])
+fname = '_'.join([ str(args.n_neurons), str(args.n_train), str(args.seed), str(args.c_inhib), str(args.c_excite), str(args.wmax) ])
 
 # Set logging configuration.
 logging.basicConfig(format='%(message)s', 
@@ -92,258 +97,215 @@ logging.basicConfig(format='%(message)s',
 
 # Log argument values.
 print('\nOptional argument values:')
-for key, value in args.items():
+for key, value in vars(args).items():
 	print('-', key, ':', value)
 
-print('\n')
-
 # Initialize the spiking neural network.
-network = Network(dt=dt)
+network = Network(dt=args.dt)
 
 # Add neuron populations.
-network.add_group(InputGroup(n_input, traces=traces), 'X')
-network.add_group(AdaptiveLIFGroup(n_neurons, traces=traces, rest=-65.0, reset=-65.0,
-			threshold=-52.0, voltage_decay=1e-2, refractory=5, trace_tc=trace_tc), 'Ae')
-network.add_group(LIFGroup(n_neurons, traces=traces, rest=-60.0, reset=-45.0,
-		threshold=-40.0, voltage_decay=1e-1, refractory=2, trace_tc=trace_tc), 'Ai')
+network.add_group(InputGroup(args.n_input, traces=traces), 'X')
+network.add_group(AdaptiveLIFGroup(args.n_neurons, traces=traces, rest=-65.0, reset=-65.0,
+			threshold=-52.0, voltage_decay=1e-2, refractory=5, trace_tc=args.trace_tc), 'Ae')
+network.add_group(LIFGroup(args.n_neurons, traces=traces, rest=-60.0, reset=-45.0,
+		threshold=-40.0, voltage_decay=1e-1, refractory=2, trace_tc=args.trace_tc), 'Ai')
 
 # Add synaptic connections between populations
-if mode == 'train':
+if args.mode == 'train':
 	network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
-			wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), source='X', target='Ae')
-elif mode == 'test':
-	if gpu:
-		network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
-					w=torch.from_numpy(load_params(params_path, fname, 'X_Ae')).cuda(),
-						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
-	else:
-		network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
-							w=torch.from_numpy(load_params(params_path, fname, 'X_Ae')),
-						wmax=wmax, nu_pre=nu_pre, nu_post=nu_post), name=('X', 'Ae'))
+			wmax=args.wmax, nu_pre=args.nu_pre, nu_post=args.nu_post), source='X', target='Ae')
+elif args.mode == 'test':
+	network.add_synapses(STDPSynapses(network.groups['X'], network.groups['Ae'],
+					w=torch.from_numpy(load_params(params_path, fname, 'X_Ae')).to(device),
+						wmax=args.wmax, nu_pre=args.nu_pre, nu_post=args.nu_post), name=('X', 'Ae'))
 
 network.add_synapses(Synapses(network.groups['Ae'], network.groups['Ai'], 
-					w=torch.diag(c_excite * torch.ones_like(torch.Tensor(n_neurons)))), source='Ae', target='Ai')
-network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=-c_inhib * \
-									(torch.ones_like(torch.Tensor(n_neurons, n_neurons)) - torch.diag(1 \
-											* torch.ones_like(torch.Tensor(n_neurons))))), source='Ai', target='Ae')
+					w=torch.diag(args.c_excite * torch.ones_like(torch.Tensor(args.n_neurons)))), source='Ae', target='Ai')
+network.add_synapses(Synapses(network.groups['Ai'], network.groups['Ae'], w=-args.c_inhib * \
+									(torch.ones_like(torch.Tensor(args.n_neurons, args.n_neurons)) - torch.diag(1 \
+											* torch.ones_like(torch.Tensor(args.n_neurons))))), source='Ai', target='Ae')
 
 # network.add_monitor(Monitor(obj=network.groups['Ae'], state_vars=['v', 'theta']), name=('Ae', ('v', 'theta')))
 # network.add_monitor(Monitor(obj=network.groups['Ai'], state_vars=['v']), name=('Ai', 'v'))
-
 # Get training or test data from disk.
-if mode == 'train':
-	data = get_MNIST(train=True)
-elif mode == 'test':
-	data = get_MNIST(train=False)
-
-X, y = data['X'], data['y']
+train_data, test_data = get_MNIST(device=device)
 
 # Count spikes from each neuron on each example (between update intervals).
-outputs = torch.zeros_like(torch.Tensor(update_interval, n_neurons))
+outputs = torch.zeros_like(torch.Tensor(args.update_interval, args.n_neurons))
 
 # Network simulation times.
-image_time = time
-rest_time = rest
-
-# Voting schemes and neuron label assignments.
-voting_schemes = ['all']
-rates = torch.zeros_like(torch.Tensor(n_neurons, 10))
-performances = { scheme : [] for scheme in voting_schemes }
-
-if mode == 'train':
-	assignments = -1 * torch.ones_like(torch.Tensor(n_neurons))
-elif mode == 'test':
-	if gpu:
-		assignments = torch.from_numpy(load_assignments(assign_path, fname)).cuda()
-	else:
-		assignments = torch.from_numpy(load_assignments(assign_path, fname))
-
-# Keep track of correct classifications for performance monitoring.
-correct = { scheme : 0 for scheme in voting_schemes }
-total_correct = { scheme : 0 for scheme in voting_schemes }
-
-# Pre-calculated values.
-n_input_sqrt = int(np.sqrt(n_input))
-n_neurons_sqrt = int(np.sqrt(n_neurons))
+image_time = args.time
 
 # Run network simulation.
 start = timeit.default_timer()
 
-if mode == 'train':
-	n_samples = n_train
-elif mode == 'test':
-	n_samples = n_test
+def log(info):
+	logging.info(info)
+	print(info)
 
-n_images = X.shape[0]
-best_accuracy = -np.inf
+def train():
+	best_accuracy = -torch.inf
+	# Voting schemes and neuron label assignments.
+	voting_schemes = ['all']
+	rates = torch.zeros((args.n_neurons, 10))
+	performances = { scheme : [] for scheme in voting_schemes }
+	assignments = -1 * torch.ones_like(torch.Tensor(args.n_neurons)).to(device)
 
-intensity = 1
-for idx in range(n_samples):
-	image, target = X[idx % n_images], y[idx % n_images]
+	# Keep track of correct classifications for performance monitoring.
+	correct = { scheme : 0 for scheme in voting_schemes }
+	total_correct = { scheme : 0 for scheme in voting_schemes }
+	
+	intensity = 1
+	for _, target in train_data : 
+		shape=target.shape
+		break
+	inputs = torch.zeros((args.update_interval*shape[0], shape[1])).to(device)
 
-	if idx % print_interval == 0:
-		# Log progress through dataset.
-		if mode == 'train':
-			logging.info('Training progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_train, (timeit.default_timer() - start)/60))
-			print('Training progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_train, (timeit.default_timer() - start)/60))
-		elif mode == 'test':
-			logging.info('Test progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_test, (timeit.default_timer() - start)/60))
-			print('Test progress: (%d / %d) - Elapsed time: %.4f' % (idx, n_test, (timeit.default_timer() - start)/60))
+	for idx, (image, target) in enumerate(train_data):
+		image, target = image.to(device), target.to(device)
+		inputs[idx*shape[0]:(idx+1)*shape[0]] = target
+		if idx % args.print_interval == 0:
+			# Log progress through dataset.
+			log('Training progress: (%d / %d) - Elapsed time: %.1f h' % (idx, args.n_train, (timeit.default_timer() - start)/3600))
 
-	if mode == 'train':
-		if idx > 0 and idx % update_interval == 0:
+		if idx > 0 and idx % args.update_interval == 0:
 			# Assign labels to neurons based on network spiking activity.
-			if gpu:
-				inputs = torch.from_numpy(y[(idx % n_images) - update_interval : idx % n_images]).cuda()
-			else:
-				inputs = torch.from_numpy(y[(idx % n_images) - update_interval : idx % n_images])
-
-			rates, assignments = assign_labels(inputs, outputs, rates, assignments)
-
+			rates, assignments = assign_labels(inputs, outputs, rates, assignments, args)
 			# Assess performance of network on last `update_interval` examples.
-			logging.info('\n'); print()
 			for scheme in performances.keys():
-				performances[scheme].append(correct[scheme] / update_interval)  # Calculate percent correctly classified.
+				performances[scheme].append(correct[scheme] / args.update_interval)  # Calculate percent correctly classified.
 				correct[scheme] = 0  # Reset number of correct examples.
 				
-				logging.info('%s -> (current) : %.4f | (best) : %.4f | (average) : %.4f' % (scheme,
-					performances[scheme][-1], max(performances[scheme]), np.mean(performances[scheme])))
-				print('%s -> (current) : %.4f | (best) : %.4f | (average) : %.4f' % (scheme,
-					performances[scheme][-1], max(performances[scheme]), np.mean(performances[scheme])))
+				log('%s -> (current) : %.4f | (best) : %.4f | (average) : %.4f' % (scheme,
+					performances[scheme][-1], max(performances[scheme]), torch.tensor(performances[scheme]).mean()))
 
 				# Save best accuracy.
 				if performances[scheme][-1] > best_accuracy:
 					best_accuracy = performances[scheme][-1]
-
-					if gpu:
-						weights = network.get_weights(('X', 'Ae')).cpu().numpy()
-						theta = network.get_theta('Ae').cpu().numpy()
-						asgnmts = assignments.cpu().numpy()
-					else:
-						weights = network.get_weights(('X', 'Ae')).numpy()
-						theta = network.get_theta('Ae').numpy()
-						asgnmts = assignments.numpy()
-
-					if gpu:
-						save_params(params_path, network.get_weights(('X', 'Ae')).cpu().numpy(), fname, 'X_Ae')
-						save_params(params_path, network.get_theta('Ae').cpu().numpy(), fname, 'theta')
-						save_assignments(assign_path, assignments.cpu().numpy(), fname)
-					else:
-						save_params(params_path, network.get_weights(('X', 'Ae')).numpy(), fname, 'X_Ae')
-						save_params(params_path, network.get_theta('Ae').numpy(), fname, 'theta')
-						save_assignments(assign_path, assignments.numpy(), fname)
+					
+					save_params(params_path, network.get_weights(('X', 'Ae')), fname, 'X_Ae')
+					save_params(params_path, network.get_theta('Ae'), fname, 'theta')
+					save_assignments(assign_path, assignments, fname)
 
 			# Save sequence of performance estimates to file.
-			p.dump(performances, open(os.path.join(perform_path, fname), 'wb'))
+			with open(os.path.join(perform_path, fname), 'wb') as f:
+				pickle.dump(performances, f)
+			inputs = torch.zeros((args.update_interval*shape[0], shape[1])).to(device)
 
-			logging.info('\n'); print()
+		inpts = {}
 
-	inpts = {}
+		# Encode current input example as Poisson spike trains.
+		inpts['X'] = generate_spike_train(image, intensity * args.dt, int(image_time / args.dt))
+		inpts['X'] = inpts['X'].to(device)
 
-	# Encode current input example as Poisson spike trains.
-	inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity * dt, int(image_time / dt))).byte()
-	if gpu:
-		inpts['X'] = inpts['X'].cuda()
+		# Run network on Poisson-encoded image data.
+		spikes = network.run(args.mode, inpts, image_time)
 
-	# Run network on Poisson-encoded image data.
-	spikes = network.run(mode, inpts, image_time)
+		# Re-run image if there isn't any network activity.
+		n_retries = 0
+		while torch.sum(spikes['Ae']) < 5 and n_retries < 3:
+			intensity += 1; n_retries += 1
+			inpts['X'] = generate_spike_train(image, intensity * args.dt, int(image_time / args.dt))
+			spikes = network.run(mode=args.mode, inpts=inpts, time=image_time)
 
-	# Re-run image if there isn't any network activity.
-	n_retries = 0
-	while torch.sum(spikes['Ae']) < 5 and n_retries < 3:
-		intensity += 1; n_retries += 1
-		inpts['X'] = torch.from_numpy(generate_spike_train(image, intensity * dt, int(image_time / dt)))
-		spikes = network.run(mode=mode, inpts=inpts, time=image_time)
+		# Reset input intensity after any retries.
+		intensity = 1
 
-	# Reset input intensity after any retries.
+		# Classify network output (spikes) based on historical spiking activity.
+		predictions = classify(spikes['Ae'], voting_schemes, assignments, args)
+
+		# If correct, increment counter variable.
+		for scheme in predictions.keys():
+			if predictions[scheme][0] == target[0]:
+				correct[scheme] += 1
+				total_correct[scheme] += 1
+
+		# Run zero image on network for `rest_time`.
+		network.reset()
+
+		# Add spikes from this iteration to the spike monitor
+		outputs[idx % args.update_interval] = torch.sum(spikes['Ae'], 0)
+
+	log('Training progress: (%d / %d) - Elapsed time: %.4f\n' % (args.n_train, args.n_train, timeit.default_timer() - start))
+
+	results = {}
+	for scheme in voting_schemes:
+		results[scheme] = 100 * total_correct[scheme] / args.n_train
+		log('Training accuracy for voting scheme "%s": %.4f\n' % (scheme, results[scheme]))
+
+
+	# Save out network parameters and assignments for the test phase.
+	save_params(params_path, network.get_weights(('X', 'Ae')), fname, 'X_Ae')
+	save_params(params_path, network.get_theta('Ae'), fname, 'theta')
+	save_assignments(assign_path, assignments, fname)
+
+def test():
+	# Voting schemes and neuron label assignments.
+	voting_schemes = ['all']
+	assignments = torch.from_numpy(load_assignments(assign_path, fname)).to(device)
+
+	# Keep track of correct classifications for performance monitoring.
+	correct = { scheme : 0 for scheme in voting_schemes }
+	total_correct = { scheme : 0 for scheme in voting_schemes }
 	intensity = 1
+	
+	for image, _ in train_data : 
+		shape=image.shape
+		break
+	inputs = torch.zeros((args.update_interval*shape[0], shape[1])).to(device)
 
-	# Classify network output (spikes) based on historical spiking activity.
-	predictions = classify(spikes['Ae'], voting_schemes, assignments)
+	for idx, (image, target) in enumerate(train_data):
+		image, target = image.to(device), target.to(device)
+		inputs[idx*shape[0]:(idx+1)*shape[0]] = image
+		if idx % args.print_interval == 0:
+			# Log progress through dataset.
+			log('Training progress: (%d / %d) - Elapsed time: %.1f h' % (idx, args.n_train, (timeit.default_timer() - start)/3600))
 
-	# If correct, increment counter variable.
-	for scheme in predictions.keys():
-		if predictions[scheme][0] == target[0]:
-			correct[scheme] += 1
-			total_correct[scheme] += 1
+		inpts = {}
 
-	# Run zero image on network for `rest_time`.
-	network.reset()
+		# Encode current input example as Poisson spike trains.
+		inpts['X'] = generate_spike_train(image, intensity * args.dt, int(image_time / args.dt))
+		inpts['X'] = inpts['X'].to(device)
 
-	# Add spikes from this iteration to the spike monitor
-	outputs[idx % update_interval] = torch.sum(spikes['Ae'], 0)
+		# Run network on Poisson-encoded image data.
+		spikes = network.run(args.mode, inpts, image_time)
 
-	# Optionally plot the excitatory, inhibitory spiking.
-	if plot:
-		if gpu:
-			inpt = inpts['X'].cpu().numpy().T
-			Ae_spikes = spikes['Ae'].cpu().numpy().T; Ai_spikes = spikes['Ai'].cpu().numpy().T
-			input_exc_weights = network.synapses[('X', 'Ae')].w.cpu().numpy()
-			square_weights = get_square_weights(input_exc_weights, n_input_sqrt, n_neurons_sqrt)
-			asgnmts = assignments.cpu().numpy().reshape([n_neurons_sqrt, n_neurons_sqrt]).T
-			
-			# exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').cpu().numpy()
-			# inh_voltages = network.monitors[('Ai', 'v')].get('v').cpu().numpy(); network.monitors[('Ai', 'v')].reset()
-		else:
-			inpt = inpts['X'].numpy().T
-			Ae_spikes = spikes['Ae'].numpy().T; Ai_spikes = spikes['Ai'].numpy().T
-			input_exc_weights = network.synapses[('X', 'Ae')].w.numpy()
-			square_weights = get_square_weights(input_exc_weights, n_input_sqrt, n_neurons_sqrt)
-			asgnmts = assignments.numpy().reshape([n_neurons_sqrt, n_neurons_sqrt]).T
-			
-			# exc_voltages = network.monitors[('Ae', ('v', 'theta'))].get('v').numpy()
-			# inh_voltages = network.monitors[('Ai', 'v')].get('v').numpy(); network.monitors[('Ai', 'v')].reset()
-		
-		if idx == 0:
-			inpt_ims = plot_input(image.reshape(n_input_sqrt, n_input_sqrt), inpt)
-			spike_ims = plot_spikes(Ae_spikes, Ai_spikes)
-			weight_ims = plot_weights(square_weights, asgnmts, wmax=wmax)
-			performance_ax = plot_performance(performances)
+		# Re-run image if there isn't any network activity.
+		n_retries = 0
+		while torch.sum(spikes['Ae']) < 5 and n_retries < 3:
+			intensity += 1; n_retries += 1
+			inpts['X'] = generate_spike_train(image, intensity * args.dt, int(image_time / args.dt))
+			spikes = network.run(mode=args.mode, inpts=inpts, time=image_time)
 
-			# voltage_axes = plot_voltages(exc_voltages, inh_voltages)
-		else:
-			inpt_ims = plot_input(image.reshape(n_input_sqrt, n_input_sqrt), inpt, ims=inpt_ims)
-			spike_ims = plot_spikes(Ae_spikes, Ai_spikes, ims=spike_ims)
-			weight_ims = plot_weights(square_weights, asgnmts, ims=weight_ims)
-			performance_ax = plot_performance(performances, ax=performance_ax)
+		# Reset input intensity after any retries.
+		intensity = 1
 
-			# voltage_axes = plot_voltages(exc_voltages, inh_voltages, axes=voltage_axes)
-		
-		plt.pause(1e-8)
+		# Classify network output (spikes) based on historical spiking activity.
+		predictions = classify(spikes['Ae'], voting_schemes, assignments, args)
 
+		# If correct, increment counter variable.
+		for scheme in predictions.keys():
+			if predictions[scheme][0] == target[0]:
+				correct[scheme] += 1
+				total_correct[scheme] += 1
 
-if mode == 'train':
-	logging.info('Training progress: (%d / %d) - Elapsed time: %.4f\n' % (n_train, n_train, timeit.default_timer() - start))
-	print('Training progress: (%d / %d) - Elapsed time: %.4f\n' % (n_train, n_train, timeit.default_timer() - start))
-elif mode == 'test':
-	logging.info('Test progress: (%d / %d) - Elapsed time: %.4f\n' % (n_test, n_test, timeit.default_timer() - start))
-	print('Test progress: (%d / %d) - Elapsed time: %.4f\n' % (n_test, n_test, timeit.default_timer() - start))
+		# Run zero image on network for `rest_time`.
+		network.reset()
 
-results = {}
-for scheme in voting_schemes:
-	if mode == 'train':
-		results[scheme] = 100 * total_correct[scheme] / n_train
-		logging.info('Training accuracy for voting scheme "%s": %.4f\n' % (scheme, results[scheme]))
-		print('Training accuracy for voting scheme "%s": %.4f\n' % (scheme, results[scheme]))
-	elif mode == 'test':
-		results[scheme] = 100 * total_correct[scheme] / n_test
-		logging.info('Test accuracy for voting scheme "%s": %.4f\n' % (scheme, results[scheme]))
-		print('Test accuracy for voting scheme "%s": %.4f\n' % (scheme, results[scheme]))
+		# Add spikes from this iteration to the spike monitor
+		outputs[idx % args.update_interval] = torch.sum(spikes['Ae'], 0)
 
-# Save out network parameters and assignments for the test phase.
-if mode == 'train':
-	if gpu:
-		save_params(params_path, network.get_weights(('X', 'Ae')).cpu().numpy(), fname, 'X_Ae')
-		save_params(params_path, network.get_theta('Ae').cpu().numpy(), fname, 'theta')
-		save_assignments(assign_path, assignments.cpu().numpy(), fname)
-	else:
-		save_params(params_path, network.get_weights(('X', 'Ae')).numpy(), fname, 'X_Ae')
-		save_params(params_path, network.get_theta('Ae').numpy(), fname, 'theta')
-		save_assignments(assign_path, assignments.numpy(), fname)
+	log('Test progress: (%d / %d) - Elapsed time: %.4f\n' % (args.n_test, args.n_test, timeit.default_timer() - start))
 
-if mode == 'test':
+	results = {}
+	for scheme in voting_schemes:
+		results[scheme] = 100 * total_correct[scheme] / args.n_test
+		log('Test accuracy for voting scheme "%s": %.4f\n' % (scheme, results[scheme]))
+
+	# Save out network parameters and assignments for the test phase.
+
 	results = pd.DataFrame([[datetime.now(), fname] + list(results.values())], columns=['date', 'parameters'] + list(results.keys()))
-	results_fname = '_'.join([str(n_neurons), str(n_train), 'results.csv'])
+	results_fname = '_'.join([str(args.n_neurons), str(args.n_train), 'results.csv'])
 	
 	if not results_fname in os.listdir(results_path):
 		results.to_csv(os.path.join(results_path, results_fname), index=False)
@@ -351,3 +313,9 @@ if mode == 'test':
 		all_results = pd.read_csv(os.path.join(results_path, results_fname))
 		all_results = pd.concat([all_results, results], ignore_index=True)
 		all_results.to_csv(os.path.join(results_path, results_fname), index=False)
+
+if __name__ == "__main__":
+	if args.mode == 'train':
+		train()
+	elif args.mode == 'test':
+		test()

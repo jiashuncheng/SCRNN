@@ -2,7 +2,7 @@ import torch
 import os, sys
 import numpy as np
 
-sys.path.append(os.path.abspath(os.path.join('..', 'spiketorch', 'network')))
+sys.path.insert(0,'{}'.format(os.path.abspath(os.path.join(os.path.dirname(__file__), "../network"))))
 
 import groups, synapses
 
@@ -121,7 +121,7 @@ def save_params(params_path, params, fname, prefix):
 		- params (numpy.ndarray): Array of params to save.
 		- fname (str): File name of file to write to.
 	'''
-	np.save(os.path.join(params_path, '_'.join([prefix, fname]) + '.npy'), params)
+	torch.save(params, os.path.join(params_path, '_'.join([prefix, fname]) + '.pth'))
 
 
 def load_params(params_path, fname, prefix):
@@ -135,7 +135,7 @@ def load_params(params_path, fname, prefix):
 	Returns:
 		- params (numpy.ndarray): Params stored in file `fname`.
 	'''
-	return np.load(os.path.join(params_path, '_'.join([prefix, fname]) + '.npy'))
+	return torch.load(os.path.join(params_path, '_'.join([prefix, fname]) + '.pth'))
 
 
 def save_assignments(assign_path, assignments, fname):
@@ -146,7 +146,7 @@ def save_assignments(assign_path, assignments, fname):
 		- assignments (numpy.ndarray): Array of assignments to save.
 		- fname (str): File name of file to write to.
 	'''
-	np.save(os.path.join(assign_path, '_'.join(['assignments', fname]) + '.npy'), assignments)
+	torch.save(assignments, os.path.join(assign_path, '_'.join(['assignments', fname]) + '.pth'))
 
 
 def load_assignments(assign_path, fname):
@@ -159,14 +159,14 @@ def load_assignments(assign_path, fname):
 	Returns:
 		- assignments (numpy.ndarray): Assignments stored in file `fname`.
 	'''
-	return np.load(os.path.join(assign_path, '_'.join(['assignments', fname]) + '.npy'))
+	return torch.load(os.path.join(assign_path, '_'.join(['assignments', fname]) + '.pth'))
 
 
 def get_square_weights(weights, n_input_sqrt, n_neurons_sqrt):
 	'''
 	Get the weights from the input to excitatory layer and reshape them.
 	'''
-	square_weights = np.zeros_like(torch.Tensor([n_input_sqrt * n_neurons_sqrt,
+	square_weights = torch.zeros_like(torch.Tensor([n_input_sqrt * n_neurons_sqrt,
 												n_input_sqrt * n_neurons_sqrt]))
 
 	for n in range(n_neurons_sqrt ** 2):
@@ -181,10 +181,7 @@ def get_square_weights(weights, n_input_sqrt, n_neurons_sqrt):
 
 
 def get_conv_weights(weights, kernel_size, stride, n_patches, n_patch_neurons):
-	n_patches_sqrt = int(np.sqrt(n_patches))
-	n_patch_neurons_sqrt = int(np.sqrt(n_patch_neurons))
-
-	rearranged = np.zeros_like(torch.Tensor([kernel_size * n_patch_neurons, kernel_size * n_patches]))
+	rearranged = torch.zeros_like(torch.Tensor([kernel_size * n_patch_neurons, kernel_size * n_patches]))
 
 	for patch in range(n_patches):
 		for neuron in range(n_patch_neurons):

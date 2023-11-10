@@ -1,7 +1,6 @@
 import torch
 
-
-def classify(spikes, voting_schemes, assignments):
+def classify(spikes, voting_schemes, assignments, args):
 	'''
 	Given the neuron assignments and the network spiking
 	activity, make predictions about the data targets.
@@ -10,10 +9,10 @@ def classify(spikes, voting_schemes, assignments):
 
 	predictions = {}
 	for scheme in voting_schemes:
-		rates = torch.zeros(10)
+		rates = torch.zeros(args.n_output)
 
 		if scheme == 'all':
-			for idx in range(10):
+			for idx in range(args.n_output):
 				n_assigns = torch.nonzero(assignments == idx).numel()
 				
 				if n_assigns > 0:
@@ -25,12 +24,12 @@ def classify(spikes, voting_schemes, assignments):
 	return predictions
 
 
-def assign_labels(inputs, outputs, rates, assignments):
+def assign_labels(inputs, outputs, rates, assignments, args):
 	'''
 	Given the excitatory neuron firing history, assign them class labels.
 	'''
 	# Loop over all target categories.
-	for j in range(10):
+	for j in range(args.n_output):
 		# Count the number of inputs having this target.
 		n_inputs = torch.nonzero(inputs == j).numel()
 		if n_inputs > 0:

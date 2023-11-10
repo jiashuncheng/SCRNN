@@ -1,8 +1,9 @@
 import os, sys
 import torch
+from torch.utils.data import Dataset
 import numpy as np
-import pickle as p
-
+import pickle
+from torchvision import datasets, transforms
 from struct import unpack
 
 data_path = os.path.abspath(os.path.join('data'))
@@ -10,7 +11,43 @@ data_path = os.path.abspath(os.path.join('data'))
 if not os.path.isdir(data_path):
 	os.makedirs(data_path)
 
-def get_MNIST(train=True, data_path=data_path):
+class MNIST(Dataset):
+	def __init__(self, data, target):
+		self.data = data
+		self.target = target
+
+	def __getitem__(self, index):
+		image = self.data[index]
+		label = self.target[index]
+		return image, label
+
+	def __len__(self):
+		return len(self.data)
+	
+def get_MNIST(data_path=data_path, device=None):
+	'''
+	Read input-vector (image) and target class (label, 0-9) and return it as tensor.
+	'''
+
+	train_images, train_labels = load_MNIST(train=True, data_path=data_path)
+	test_images, test_labels = load_MNIST(train=False, data_path=data_path)
+	train_dataset = MNIST(train_images, train_labels)
+	test_dataset = MNIST(test_images, test_labels)
+
+	train_dataloader = torch.utils.data.DataLoader(train_dataset, 
+												batch_size=1, 
+												shuffle=True, 
+												num_workers=0,
+												generator=torch.Generator(device=device))
+	test_dataloader = torch.utils.data.DataLoader(test_dataset, 
+											   batch_size=1, 
+											   shuffle=False, 
+											   num_workers=0,
+											   generator=torch.Generator(device=device))
+
+	return train_dataloader, test_dataloader	
+
+def load_MNIST(train=True, data_path=data_path):
 	'''
 	Read input-vector (image) and target class (label, 0-9) and return it as 
 	a list of tuples.
@@ -19,7 +56,10 @@ def get_MNIST(train=True, data_path=data_path):
 
 	if os.path.isfile(os.path.join(data_path, '%s.p' % fname)):
 		# Get pickled data from disk.
-		data = p.load(open(os.path.join(data_path, '%s.p' % fname), 'rb'))
+		with open(os.path.join(data_path, '%s.p' % fname), 'rb') as f:
+			data = pickle.load(f)
+		X = data['X']
+		y = data['y']
 	else:
 		# Open the images with gzip in read binary mode.
 		if train:
@@ -61,9 +101,10 @@ def get_MNIST(train=True, data_path=data_path):
 		X = X.reshape([N, 784])
 		data = {'X': X, 'y': y }
 
-		p.dump(data, open(os.path.join(data_path, '%s.p' % fname), 'wb'))
+		with open(os.path.join(data_path, '%s.p' % fname), 'wb') as f:
+			pickle.dump(data, f)
 
-	return data
+	return X, y
 
 
 def generate_spike_train(image, intensity, time):
@@ -74,22 +115,22 @@ def generate_spike_train(image, intensity, time):
 	image = image * intensity
 
 	# Get number of input neurons.
-	n_input = image.shape[0]
+	n_input = image.shape[1]
 	
 	# Image data preprocessing (divide by 4, invert (for spike rates),
 	# multiply by 1000 (conversion from milliseconds to seconds).
 	image = (1 / (image / 4)) * 1000
-	image[np.isinf(image)] = 0
+	image = torch.where(image == float('inf'), torch.zeros_like(image), image)
 	
 	# Make the spike data.
-	spike_times = np.random.poisson(image, [time, n_input])
-	spike_times = np.cumsum(spike_times, axis=0)
+	spike_times = torch.poisson(image.repeat(time,1))
+	spike_times = torch.cumsum(spike_times, axis=0)
 	spike_times[spike_times >= time] = 0
 
 	# Create spikes matrix from spike times.
-	spikes = np.zeros([time, n_input])
-	for idx in range(time):
-		spikes[spike_times[idx, :], np.arange(n_input)] = 1
+	spikes = torch.zeros([time, n_input]).to(image.device)
+	index = torch.arange(n_input).repeat(time, 1).type(torch.int64)
+	spikes.index_put_((spike_times.type(torch.int64), index), torch.tensor(1.))
 
 	# Temporary fix: The above code forces a spike from
 	# every input neuron on the first time step.
