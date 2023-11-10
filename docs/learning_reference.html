@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2D2D2D" />
+  
+  <title>PySNN :: pysnn.learning</title>
+  
+
+  <link rel="icon" type="image/png" sizes="32x32" href="_static/img/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="_static/img/favicon-16x16.png">
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+
+  <link rel="stylesheet" href="_static/css/insegel.css"/>
+
+  <script type="text/javascript">
+    var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:'',
+        VERSION:'0.0.1',
+        LANGUAGE:'None',
+        COLLAPSE_INDEX:false,
+        FILE_SUFFIX:'.html',
+        HAS_SOURCE:  true,
+        SOURCELINK_SUFFIX: '.txt'
+    };
+  </script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  <script src="https://email.tl.fortawesome.com/c/eJxNjUEOgyAQAF8jR7Kw6wIHDh7sP1Cw2mgxgmn6-3JsMqc5zEQfE8dkxOY1KKMUOI3ACFKRJpSW2AAp7ontYIaxI6i7XPJVwyeVfCQ550Os3jLrGSNOLgbdAy6s0PBk2TFNjEbsfq31LB0OnX407pJa5v2faRadwSW63mn5KuLyR9j2tgx3zecanl-55R_-jjPs"></script>
+
+</head>
+
+<body>
+  <div id="insegel-container">
+    <header>
+      <div id="logo-container">
+          
+          <a href="index.html"><img src="_static/img/logo.svg"></a>
+          
+
+      </div>
+      <div id="project-container">
+        <h1>PySNN Documentation</h1>
+      </div>
+    </header>
+
+    <div id="content-container">
+
+      <div id="main-content-container">
+        <div id="main-content-header">
+          <h1>pysnn.learning</h1>
+        </div>
+        <div id="main-content">
+          
+  <div class="section" id="module-pysnn.learning">
+<span id="pysnn-learning"></span><h1>pysnn.learning<a class="headerlink" href="#module-pysnn.learning" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="pysnn.learning.LearningRule">
+<em class="property">class </em><code class="sig-prename descclassname">pysnn.learning.</code><code class="sig-name descname">LearningRule</code><span class="sig-paren">(</span><em class="sig-param">layers</em>, <em class="sig-param">defaults</em><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.LearningRule" title="Permalink to this definition">¶</a></dt>
+<dd><p>Base class for correlation based learning rules in spiking neural networks.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>layers</strong> – An iterable or <code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code> of <code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code> 
+the latter is a dict that contains a <code class="xref py py-class docutils literal notranslate"><span class="pre">pysnn.Connection</span></code> state dict, a pre-synaptic <code class="xref py py-class docutils literal notranslate"><span class="pre">pysnn.Neuron</span></code> state dict, 
+and a post-synaptic <code class="xref py py-class docutils literal notranslate"><span class="pre">pysnn.Neuron</span></code> state dict that together form a single layer. These objects their state’s will be 
+used for optimizing weights.
+During initialization of a learning rule that inherits from this class it is supposed to select only the parameters it needs
+from these objects.
+The higher lever iterable or <code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code> contain groups that use the same parameter during training. This is analogous to
+PyTorch optimizers parameter groups.</p></li>
+<li><p><strong>defaults</strong> – A dict containing default hyper parameters. This is a placeholder for possible changes later on, these groups would work
+exactly the same as those for PyTorch optimizers.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="pysnn.learning.LearningRule.update_state">
+<code class="sig-name descname">update_state</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.LearningRule.update_state" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update state parameters of LearningRule based on latest network forward pass.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pysnn.learning.LearningRule.step">
+<code class="sig-name descname">step</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.LearningRule.step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs single learning step.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pysnn.learning.LearningRule.reset_state">
+<code class="sig-name descname">reset_state</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.LearningRule.reset_state" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reset state parameters of LearningRule.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pysnn.learning.LearningRule.check_layers">
+<code class="sig-name descname">check_layers</code><span class="sig-paren">(</span><em class="sig-param">layers</em><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.LearningRule.check_layers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check if layers provided to constructor are of the right format.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>layers</strong> – OrderedDict containing state dicts for each layer.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pysnn.learning.LearningRule.pre_mult_post">
+<code class="sig-name descname">pre_mult_post</code><span class="sig-paren">(</span><em class="sig-param">pre</em>, <em class="sig-param">post</em>, <em class="sig-param">con_type</em><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.LearningRule.pre_mult_post" title="Permalink to this definition">¶</a></dt>
+<dd><p>Multiply a presynaptic term with a postsynaptic term, in the following order: pre x post.</p>
+<p>The outcome of this operation preserves batch size, but furthermore is directly broadcastable 
+with the weight of the connection.</p>
+<p>This operation differs for Linear or Convolutional connections.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pre</strong> – Presynaptic term</p></li>
+<li><p><strong>post</strong> – Postsynaptic term</p></li>
+<li><p><strong>con_type</strong> – Connection type, supports Linear and Conv2d</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Tensor broadcastable with the weight of the connection</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="pysnn.learning.LearningRule.reduce_connections">
+<code class="sig-name descname">reduce_connections</code><span class="sig-paren">(</span><em class="sig-param">tensor</em>, <em class="sig-param">con_type</em>, <em class="sig-param">red_method=&lt;built-in method mean of type object&gt;</em><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.LearningRule.reduce_connections" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reduces the tensor along the dimensions that represent seperate connections to an element of the weight Tensor.</p>
+<p>The function used for reducing has to be a callable that can be applied to single axes of a tensor.</p>
+<p>This operation differs or Linear or Convolutional connections.
+For Linear, only the batch dimension (dim 0) is reduced.
+For Conv2d, the batch (dim 0) and the number of kernel multiplications dimension (dim 3) are reduced.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tensor</strong> – Tensor that will be reduced</p></li>
+<li><p><strong>con_type</strong> – Connection type, support Linear and Conv2d</p></li>
+<li><p><strong>red_method</strong> – Method used to reduce each dimension</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Reduced Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pysnn.learning.MSTDPET">
+<em class="property">class </em><code class="sig-prename descclassname">pysnn.learning.</code><code class="sig-name descname">MSTDPET</code><span class="sig-paren">(</span><em class="sig-param">layers</em>, <em class="sig-param">a_pre</em>, <em class="sig-param">a_post</em>, <em class="sig-param">lr</em>, <em class="sig-param">e_trace_decay</em><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.MSTDPET" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply MSTDPET from (Florian 2007) to the provided connections.</p>
+<p>Uses just a single, scalar reward value.
+Update rule can be applied at any desired time step.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>layers</strong> – OrderedDict containing state dicts for each layer.</p></li>
+<li><p><strong>a_pre</strong> – Scaling factor for presynaptic spikes influence on the eligibilty trace.</p></li>
+<li><p><strong>a_post</strong> – Scaling factor for postsynaptic spikes influence on the eligibilty trace.</p></li>
+<li><p><strong>lr</strong> – Learning rate.</p></li>
+<li><p><strong>e_trace_decay</strong> – Decay factor for the eligibility trace.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="pysnn.learning.MSTDPET.update_state">
+<code class="sig-name descname">update_state</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.MSTDPET.update_state" title="Permalink to this definition">¶</a></dt>
+<dd><p>Update eligibility trace based on pre and postsynaptic spiking activity.</p>
+<p>This function has to be called manually at desired times, often after each timestep.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pysnn.learning.MSTDPET.reset_state">
+<code class="sig-name descname">reset_state</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.MSTDPET.reset_state" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reset state parameters of LearningRule.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="pysnn.learning.MSTDPET.step">
+<code class="sig-name descname">step</code><span class="sig-paren">(</span><em class="sig-param">reward</em><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.MSTDPET.step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs single learning step.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>reward</strong> – Scalar reward value.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="pysnn.learning.FedeSTDP">
+<em class="property">class </em><code class="sig-prename descclassname">pysnn.learning.</code><code class="sig-name descname">FedeSTDP</code><span class="sig-paren">(</span><em class="sig-param">layers</em>, <em class="sig-param">lr</em>, <em class="sig-param">w_init</em>, <em class="sig-param">a</em><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.FedeSTDP" title="Permalink to this definition">¶</a></dt>
+<dd><p>STDP version for Paredes Valles, performs mean operation over the batch dimension before weight update.</p>
+<p>Defined in “Unsupervised Learning of a Hierarchical Spiking Neural Network for Optical Flow Estimation: From Events to Global Motion Perception - F.P. Valles, et al.”</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>layers</strong> – OrderedDict containing state dicts for each layer.</p></li>
+<li><p><strong>lr</strong> – Learning rate.</p></li>
+<li><p><strong>w_init</strong> – Initialization/reference value for all weights.</p></li>
+<li><p><strong>a</strong> – Stability parameter, a &lt; 1.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="pysnn.learning.FedeSTDP.step">
+<code class="sig-name descname">step</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#pysnn.learning.FedeSTDP.step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs single learning step.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+        </div>
+      </div>
+
+      <div id="side-menu-container">
+
+        <div id="search" role="search">
+        <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+            <input type="text" name="q" placeholder="Search..." />
+            <input type="hidden" name="check_keywords" value="yes" />
+            <input type="hidden" name="area" value="default" />
+        </form>
+</div>
+
+        <div id="side-menu" role="navigation">
+
+          
+  
+    
+  
+  
+    <p class="caption"><span class="caption-text">Usage:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="neurons.html">Neurons</a></li>
+<li class="toctree-l1"><a class="reference internal" href="connections.html">Connections</a></li>
+<li class="toctree-l1"><a class="reference internal" href="learning_rules.html">Learning Rules</a></li>
+<li class="toctree-l1"><a class="reference internal" href="networks.html">Networks</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Package Reference:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="connection_reference.html">pysnn.connection</a></li>
+<li class="toctree-l1"><a class="reference internal" href="neuron_reference.html">pysnn.neuron</a></li>
+<li class="toctree-l1"><a class="reference internal" href="network_reference.html">pysnn.network</a></li>
+<li class="toctree-l1"><a class="reference internal" href="file_io_reference.html">pysnn.file_io</a></li>
+<li class="toctree-l1"><a class="reference internal" href="functional_reference.html">pysnn.functional</a></li>
+<li class="toctree-l1"><a class="reference internal" href="encoding_reference.html">pysnn.encoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="datasets_reference.html">pysnn.datasets</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">pysnn.learning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="utils_reference.html">pysnn.utils</a></li>
+</ul>
+
+  
+
+
+        </div>
+
+        
+
+      </div>
+
+    </div>
+
+<footer>
+    <div id="footer-info">
+        <ul id="build-details">
+            
+                <li class="footer-element">
+                    
+                        <a href="_sources/learning_reference.rst.txt" rel="nofollow"> source</a>
+                    
+                </li>
+            
+
+            
+
+            
+        </ul>
+        <div id="credit">
+            created with <a href="http://sphinx-doc.org/">Sphinx</a> and <a href="https://github.com/Autophagy/insegel">Insegel</a>
+
+        </div>
+    </div>
+
+    <a id="menu-toggle" class="fa fa-bars" aria-hidden="true"></a>
+
+    <script type="text/javascript">
+      $("#menu-toggle").click(function() {
+        $("#menu-toggle").toggleClass("toggled");
+        $("#side-menu-container").slideToggle(300);
+      });
+    </script>
+
+</footer> 
+
+</div>
+
+</body>
+</html>
