@@ -1,30 +1,27 @@
 import torch
 
-def classify(spikes, voting_schemes, assignments, args):
+def classify(spikes, assignments, args):
 	'''
 	Given the neuron assignments and the network spiking
 	activity, make predictions about the data targets.
 	'''
 	spikes = spikes.sum(0)
 
-	predictions = {}
-	for scheme in voting_schemes:
-		rates = torch.zeros(args.n_output)
+	rates = torch.zeros(args.n_output)
 
-		if scheme == 'all':
-			for idx in range(args.n_output):
-				n_assigns = torch.nonzero(assignments == idx).numel()
-				
-				if n_assigns > 0:
-					idxs = torch.nonzero((assignments == idx).long().view(-1)).view(-1)
-					rates[idx] = torch.sum(spikes[idxs]) / n_assigns
+	for idx in range(args.n_output):
+		n_assigns = torch.nonzero(assignments == idx).numel()
+		
+		if n_assigns > 0:
+			idxs = torch.nonzero((assignments == idx).long().view(-1)).view(-1)
+			rates[idx] = torch.sum(spikes[idxs]) / n_assigns
 
-		predictions[scheme] = torch.sort(rates, dim=0, descending=True)[1]
+	predictions = torch.sort(rates, dim=0, descending=True)[1]
 
 	return predictions
 
 
-def assign_labels(inputs, outputs, rates, assignments, args):
+def assign_labels(inputs, outputs, rates, args):
 	'''
 	Given the excitatory neuron firing history, assign them class labels.
 	'''

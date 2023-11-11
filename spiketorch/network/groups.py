@@ -1,5 +1,5 @@
 import torch
-
+import torch.nn as nn
 from abc import ABC, abstractmethod
 
 
@@ -10,7 +10,6 @@ class Group(ABC):
 	def __init__(self):
 		super().__init__()
 
-	@abstractmethod
 	def step(self, inpts, mode):
 		pass
 
@@ -24,7 +23,7 @@ class Group(ABC):
 		return self.x
 
 
-class InputGroup(Group):
+class InputGroup(nn.Module, Group):
 	'''
 	Group of neurons clamped to input spikes.
 	'''
@@ -39,7 +38,7 @@ class InputGroup(Group):
 			self.x = torch.zeros_like(torch.Tensor(n))  # Firing traces.
 			self.trace_tc = trace_tc  # Rate of decay of spike trace time constant.
 
-	def step(self, inpts, mode, dt):
+	def forward(self, inpts, mode, dt):
 		'''
 		On each simulation step, set the spikes of the
 		population equal to the inputs.
@@ -53,9 +52,11 @@ class InputGroup(Group):
 		if self.traces:
 			# Setting synaptic traces.
 			self.x[self.s] = 1.0
+		
+		return self.s
 
 
-class LIFGroup(Group):
+class LIFGroup(nn.Module, Group):
 	'''
 	Group of leaky integrate-and-fire neurons.
 	'''
@@ -81,7 +82,7 @@ class LIFGroup(Group):
 
 		self.refrac_count = torch.zeros_like(torch.Tensor(n))  # Refractory period counters.
 
-	def step(self, inpts, mode, dt):
+	def forward(self, inpts, mode, dt):
 		# Decay voltages.
 		self.v -= dt * self.voltage_decay * (self.v - self.rest)
 
@@ -104,8 +105,10 @@ class LIFGroup(Group):
 			# Setting synaptic traces.
 			self.x[self.s] = 1.0
 
+		return self.s
 
-class AdaptiveLIFGroup(Group):
+
+class AdaptiveLIFGroup(nn.Module, Group):
 	'''
 	Group of leaky integrate-and-fire neurons with adaptive thresholds.
 	'''
@@ -134,7 +137,7 @@ class AdaptiveLIFGroup(Group):
 
 		self.refrac_count = torch.zeros_like(torch.Tensor(n))  # Refractory period counters.
 
-	def step(self, inpts, mode, dt):
+	def forward(self, inpts, mode, dt):
 		# Decay voltages.
 		self.v -= dt * self.voltage_decay * (self.v - self.rest)
 
@@ -163,3 +166,5 @@ class AdaptiveLIFGroup(Group):
 			# Update adaptive thresholds, synaptic traces.
 			self.theta[self.s] += self.theta_plus
 			self.x[self.s] = 1.0
+
+		return self.s

@@ -1,26 +1,33 @@
 import torch
 import os, sys
 import numpy as np
+import torch.nn as nn
+from collections import OrderedDict
 
 sys.path.insert(0,'{}'.format(os.path.abspath(os.path.join(os.path.dirname(__file__), "../network"))))
 
 import groups, synapses
 
-class Network:
+class Network(nn.Module):
 	'''
 	Combines neuron groups and synapses into a spiking neural network.
 	'''
 	def __init__(self, dt=1):
+		super(Network, self).__init__()
 		self.dt = dt
 		self.groups = {}
 		self.synapses = {}
 		self.monitors = {}
+		self.layer1 = None
+		self.layer2 = None
+		self.layer3 = None
 
 	def add_group(self, group, name):
 		self.groups[name] = group
 
 	def add_synapses(self, synapses, source, target):
 		self.synapses[(source, target)] = synapses
+		return synapses
 
 	def add_monitor(self, monitor, name):
 		self.monitors[name] = monitor
@@ -46,7 +53,7 @@ class Network:
 	def get_theta(self, name):
 		return self.groups[name].theta
 
-	def run(self, mode, inpts, time):
+	def forward(self, mode, inpts, time):
 		'''
 		Run network for a single iteration.
 		'''
@@ -66,14 +73,14 @@ class Network:
 			# Update each group in turn.
 			for key in self.groups:
 				if type(self.groups[key]) == groups.InputGroup:
-					self.groups[key].step(inpts[key][timestep, :], mode, self.dt)
+					self.groups[key].forward(inpts[key][timestep, :], mode, self.dt)
 
 					# Record spikes from this population at this timestep.
 					spikes[key][timestep, :] = self.groups[key].s
 			
 			for key in self.groups:
 				if type(self.groups[key]) != groups.InputGroup:
-					self.groups[key].step(inpts[key], mode, self.dt)
+					self.groups[key].forward(inpts[key], mode, self.dt)
 
 					# Record spikes from this population at this timestep.
 					spikes[key][timestep, :] = self.groups[key].s
