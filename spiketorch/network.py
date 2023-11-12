@@ -8,7 +8,7 @@ sys.path.insert(0,'{}'.format(os.path.abspath(os.path.join(os.path.dirname(__fil
 
 from synapses import Synapses, STDPSynapses
 from groups import InputGroup, LIFGroup, AdaptiveLIFGroup
-
+ 
 class Network(nn.Module):
 	'''
 	Combines neuron groups and synapses into a spiking neural network.
