@@ -7,16 +7,16 @@ def classify(spikes, assignments, args):
 	'''
 	spikes = spikes.sum(0)
 
-	rates = torch.zeros(args.n_output)
+	rates = torch.zeros(args.batch_size, args.n_output)
 
 	for idx in range(args.n_output):
 		n_assigns = torch.nonzero(assignments == idx).numel()
 		
 		if n_assigns > 0:
 			idxs = torch.nonzero((assignments == idx).long().view(-1)).view(-1)
-			rates[idx] = torch.sum(spikes[idxs]) / n_assigns
+			rates[:,idx] = torch.sum(spikes[:,idxs]) / n_assigns
 
-	predictions = torch.sort(rates, dim=0, descending=True)[1]
+	predictions = torch.sort(rates, dim=1, descending=True)[1].index_select(1, torch.tensor([0]))
 
 	return predictions
 
