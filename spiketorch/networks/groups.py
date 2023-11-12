@@ -73,7 +73,7 @@ class LIFGroup(nn.Module, Group):
 	Group of leaky integrate-and-fire neurons.
 	'''
 	def __init__(self, batch_size, n, traces=False, rest=0., reset=0., threshold=0.5, 
-								refractory=2, voltage_decay=1., trace_tc=5e-2, window=0.2, dt=1., tau=5):
+								refractory=2, voltage_decay=1., trace_tc=5e-2, window=0.2, dt=1., tau=3):
 		
 		super().__init__()
 		self.batch_size = batch_size

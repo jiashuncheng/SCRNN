@@ -21,18 +21,22 @@ class STDPSynapses(nn.Module):
 	'''
 	Specifies STDP-adapted synapses between two populations of neurons.
 	'''
-	def __init__(self, source, target, w=None, nu_pre=1e-4, nu_post=1e-2, wmax=1.0, norm=78.0):
+	def __init__(self, source, target, batch_size=1, nu_pre=1e-2, nu_post=1e-2, wmax=1.0, norm=78.0):
 		super().__init__()
 		self.source = source
 		self.target = target
+		self.batch_size = batch_size
 
-		self.w = nn.Parameter(torch.rand(source.n, target.n))
+		# self.w = nn.Parameter(torch.rand(source.n, target.n))
+		self.w = torch.rand(source.n, target.n)
 		nn.init.xavier_uniform_(self.w)
+		self.w.data *= 5
 
 		self.nu_pre = nu_pre
 		self.nu_post = nu_post
 		self.wmax = wmax
 		self.norm = norm
+		self.stdp_lr = 1e-3
 
 	def normalize(self):
 		'''
@@ -45,12 +49,15 @@ class STDPSynapses(nn.Module):
 		Perform STDP weight update.
 		'''
 		# Post-synaptic.
-		self.w.data += self.nu_post * (self.source.x.view(self.source.n, 1) * self.target.s.float().view(1, self.target.n))
+		post = self.nu_post * (self.source.x.view(self.source.n, self.batch_size) @ self.target.s.float().view(self.batch_size, self.target.n))
 		# Pre-synaptic.
-		self.w.data -= self.nu_pre * (self.target.x.view(1, self.target.n) * self.source.s.float().view(self.source.n, 1))
+		pre = -self.nu_pre * (self.source.s.float().view(self.source.n, self.batch_size) @ self.target.x.view(self.batch_size, self.target.n))
+
+		self.delta_w = self.stdp_lr * post + self.stdp_lr * pre
+		self.w.data += self.delta_w
 
 		# Ensure that weights are within [0, self.wmax].
-		self.w.data.clamp_(0, self.wmax)	
+		self.w.data.clamp_(-self.wmax, self.wmax)	
 
 	def forward(self, spike):
 		return spike.float() @ self.w

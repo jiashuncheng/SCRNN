@@ -22,8 +22,8 @@ class Network(nn.Module):
 		self.neuron_h = LIFGroup(args.batch_size, args.n_hidden, traces=traces, rest=args.rest, reset=args.reset, threshold=args.threshold, voltage_decay=args.voltage_decay, refractory=args.refractory, trace_tc=args.trace_tc, dt=self.dt)
 		self.neuron_o = LIFGroup(args.batch_size, args.n_output, traces=traces, rest=args.rest, reset=args.reset, threshold=args.threshold, voltage_decay=args.voltage_decay, refractory=args.refractory, trace_tc=args.trace_tc, dt=self.dt)
 		self.layer_i = Synapses(self.neuron_i, self.neuron_h)
-		# self.layer_h = STDPSynapses(self.neuron_h, self.neuron_h, wmax=args.wmax, nu_pre=args.nu_pre, nu_post=args.nu_post)
-		self.layer_h = Synapses(self.neuron_h, self.neuron_h)
+		self.layer_h = STDPSynapses(self.neuron_h, self.neuron_h, wmax=args.wmax, nu_pre=args.nu_pre, nu_post=args.nu_post, batch_size=args.batch_size)
+		# self.layer_h = Synapses(self.neuron_h, self.neuron_h)
 		self.layer_o = Synapses(self.neuron_h, self.neuron_o)
 
 	def forward(self, mode, x_in, time):
@@ -44,9 +44,9 @@ class Network(nn.Module):
 			if mode == 'train' and isinstance(self.layer_h, STDPSynapses):
 				self.layer_h.update()
 
-		# Normalize synapse weights if we're in training mode.
-		if mode == 'train' and isinstance(self.layer_h, STDPSynapses):
-			self.layer_h.update()
+		# # Normalize synapse weights if we're in training mode.
+		# if mode == 'train' and isinstance(self.layer_h, STDPSynapses):
+		# 	self.layer_h.normalize()
 			
 		return y_out_list
 

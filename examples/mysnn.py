@@ -18,23 +18,10 @@ from network import Network
 from network import save_params, load_params
 from datasets import get_MNIST, get_MemoryMNIST, generate_spike_train, generate_memory_spike_train, generate_memory_spike_train_binary
 
+
 def log(info):
 	logging.info(info)
 	print(info)
-
-def device_init(seed):
-	np.random.seed(seed)
-	torch.manual_seed(seed)
-	np.set_printoptions(threshold=sys.maxsize, linewidth=200)
-	torch.set_printoptions(threshold=sys.maxsize, linewidth=100, edgeitems=10)
-	if args.gpu == 'True':
-		assert torch.cuda.is_available()
-		torch.cuda.manual_seed(seed)
-		torch.set_default_tensor_type('torch.cuda.FloatTensor')
-		device = torch.device("cuda:0")
-	else:
-		device = torch.device("cpu")
-	return device
 
 parser = argparse.ArgumentParser(description='ETH (with LIF neurons) \
 					SNN toy model simulation implemented with PyTorch.')
@@ -48,11 +35,11 @@ parser.add_argument('--n_train', type=int, default=100)
 parser.add_argument('--n_test', type=int, default=1)
 parser.add_argument('--update_interval', type=int, default=10)
 parser.add_argument('--print_interval', type=int, default=10)
-parser.add_argument('--nu_pre', type=float, default=1e-4)
+parser.add_argument('--nu_pre', type=float, default=1e-2)
 parser.add_argument('--nu_post', type=float, default=1e-2)
 parser.add_argument('--c_excite', type=float, default=22.5)
 parser.add_argument('--c_inhib', type=float, default=17.5)
-parser.add_argument('--time', type=int, default=100)
+parser.add_argument('--time', type=int, default=20)
 parser.add_argument('--rest', type=float, default=0.)
 parser.add_argument('--reset', type=float, default=0.)
 parser.add_argument('--threshold', type=float, default=0.5)
@@ -62,7 +49,7 @@ parser.add_argument('--trace_tc', type=int, default=5e-2)
 parser.add_argument('--wmax', type=float, default=1.0)
 parser.add_argument('--dt', type=float, default=1)
 parser.add_argument('--batch_size', type=int, default=20)
-parser.add_argument('--gpu', type=str, default='True')
+parser.add_argument('--gpu', type=str, default='1')
 parser.add_argument('--vote', type=str, default='False')
 parser.add_argument('--plot', type=str, default='False')
 parser.add_argument('--model_name', type=str, default='eth')
@@ -92,7 +79,18 @@ logging.basicConfig(format='%(message)s',
 					filemode='w')
 
 # Set random number generator.
-device = device_init(args.seed)
+np.random.seed(args.seed)
+torch.manual_seed(args.seed)
+np.set_printoptions(threshold=sys.maxsize, linewidth=200)
+torch.set_printoptions(threshold=sys.maxsize, linewidth=100, edgeitems=10)
+os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+if args.gpu is not None:
+	assert torch.cuda.is_available()
+	torch.cuda.manual_seed(args.seed)
+	torch.set_default_tensor_type('torch.cuda.FloatTensor')
+	device = torch.device("cuda:0")
+else:
+	device = torch.device("cpu")
 
 for path in [logs_path, params_path, assign_path, results_path, perform_path]:
 	if not os.path.isdir(path):
@@ -106,8 +104,8 @@ loss_fun = torch.nn.MSELoss()
 # Run network simulation.
 start = timeit.default_timer()
 
+data = get_MemoryMNIST(args, device=device)
 def train_Memory():
-	data = get_MemoryMNIST(args, device=device)
 	# Keep track of correct classifications for performance monitoring.
 	for i in range(args.n_train):
 		total_correct = 0
@@ -127,6 +125,7 @@ def train_Memory():
 				optimizer.zero_grad()
 				loss.backward()
 				optimizer.step()
+				# print(network.layer_h.w.max(), network.layer_h.w.min())
 				# If correct, increment counter variable.
 				correct = (predictions.argmax(1, keepdim=True) == target).float().sum()
 				correct = correct / args.batch_size
