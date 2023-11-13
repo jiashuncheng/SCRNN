@@ -28,8 +28,8 @@ parser = argparse.ArgumentParser(description='ETH (with LIF neurons) \
 
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--mode', type=str, default='train')
-parser.add_argument('--n_input', type=int, default=784)
-parser.add_argument('--n_hidden', type=int, default=1000)
+parser.add_argument('--n_input', type=int, default=1)
+parser.add_argument('--n_hidden', type=int, default=100)
 parser.add_argument('--n_output', type=int, default=2)
 parser.add_argument('--n_train', type=int, default=100)
 parser.add_argument('--n_test', type=int, default=1)
@@ -39,14 +39,14 @@ parser.add_argument('--nu_pre', type=float, default=1e-2)
 parser.add_argument('--nu_post', type=float, default=1e-2)
 parser.add_argument('--c_excite', type=float, default=22.5)
 parser.add_argument('--c_inhib', type=float, default=17.5)
-parser.add_argument('--time', type=int, default=20)
+parser.add_argument('--time', type=int, default=100)
 parser.add_argument('--rest', type=float, default=0.)
 parser.add_argument('--reset', type=float, default=0.)
 parser.add_argument('--threshold', type=float, default=0.5)
 parser.add_argument('--voltage_decay', type=float, default=1)
 parser.add_argument('--refractory', type=int, default=2)
 parser.add_argument('--trace_tc', type=int, default=5e-2)
-parser.add_argument('--wmax', type=float, default=1.0)
+parser.add_argument('--wmax', type=float, default=10.0)
 parser.add_argument('--dt', type=float, default=1)
 parser.add_argument('--batch_size', type=int, default=20)
 parser.add_argument('--gpu', type=str, default='1')
@@ -98,7 +98,7 @@ for path in [logs_path, params_path, assign_path, results_path, perform_path]:
 
 network = Network(args, device)
 
-optimizer = optim.Adam(network.parameters(), lr=0.001)
+optimizer = optim.Adam(network.parameters(), lr=0.01)
 loss_fun = torch.nn.MSELoss()
 
 # Run network simulation.
@@ -111,11 +111,11 @@ def train_Memory():
 		total_correct = 0
 		best_accuracy = -1
 		correct = 0
-		with tqdm(total=args.n_train, ncols=80) as _tqdm:
+		with tqdm(total=args.n_train, ncols=100) as _tqdm:
 			_tqdm.set_description('epoch: {}/{}'.format(i+1, args.n_train))
 			for idx in range(args.n_train):
 				# Encode current input example as Poisson spike trains.
-				x_in, target = generate_memory_spike_train(args, data)
+				x_in, target = generate_memory_spike_train_binary(args, data)
 				x_in, target = x_in.to(device), target.to(device)
 				# Run network on Poisson-encoded image data.
 				y_out = network(args.mode, x_in, args.time)
@@ -125,13 +125,13 @@ def train_Memory():
 				optimizer.zero_grad()
 				loss.backward()
 				optimizer.step()
-				# print(network.layer_h.w.max(), network.layer_h.w.min())
+				# print(network.layer_h.w.max(), network.layer_h.w.mean())
 				# If correct, increment counter variable.
 				correct = (predictions.argmax(1, keepdim=True) == target).float().sum()
 				correct = correct / args.batch_size
 				total_correct += (predictions.argmax(1, keepdim=True) == target).float().sum()
 				network.reset()
-				_tqdm.set_postfix(loss='{:.4f}'.format(loss))
+				_tqdm.set_postfix(loss='{:.4f}, {:.4f}, {:.4f}'.format(loss, network.layer_h.w.max(), network.layer_h.w.mean()))
 				_tqdm.update(1)
 		total_correct = total_correct / (args.batch_size * args.n_train) 
 		if total_correct > best_accuracy:

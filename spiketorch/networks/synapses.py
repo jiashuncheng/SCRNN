@@ -29,14 +29,14 @@ class STDPSynapses(nn.Module):
 
 		# self.w = nn.Parameter(torch.rand(source.n, target.n))
 		self.w = torch.rand(source.n, target.n)
-		nn.init.xavier_uniform_(self.w)
+		# nn.init.xavier_uniform_(self.w)
 		self.w.data *= 5
 
 		self.nu_pre = nu_pre
 		self.nu_post = nu_post
 		self.wmax = wmax
 		self.norm = norm
-		self.stdp_lr = 1e-3
+		self.stdp_lr = 0.#1e-4
 
 	def normalize(self):
 		'''
@@ -57,7 +57,7 @@ class STDPSynapses(nn.Module):
 		self.w.data += self.delta_w
 
 		# Ensure that weights are within [0, self.wmax].
-		self.w.data.clamp_(-self.wmax, self.wmax)	
+		self.w.data.clamp_(0., self.wmax)	
 
 	def forward(self, spike):
 		return spike.float() @ self.w
