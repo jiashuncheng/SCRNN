@@ -39,7 +39,6 @@ parser.add_argument('--nu_pre', type=float, default=1e-2)
 parser.add_argument('--nu_post', type=float, default=1e-2)
 parser.add_argument('--c_excite', type=float, default=22.5)
 parser.add_argument('--c_inhib', type=float, default=17.5)
-parser.add_argument('--time', type=int, default=100)
 parser.add_argument('--rest', type=float, default=0.)
 parser.add_argument('--reset', type=float, default=0.)
 parser.add_argument('--threshold', type=float, default=0.5)
@@ -53,9 +52,15 @@ parser.add_argument('--gpu', type=str, default='1')
 parser.add_argument('--vote', type=str, default='False')
 parser.add_argument('--plot', type=str, default='False')
 parser.add_argument('--model_name', type=str, default='eth')
+parser.add_argument('--time', type=int, default=30)
+parser.add_argument('--delay', type=int, default=10)
+parser.add_argument('--decision', type=int, default=10)
 
 # Place parsed arguments in local scope.
 args = parser.parse_args()
+
+# Check args
+assert args.time >= args.delay + args.decision
 
 # Log argument values.
 print('Optional argument values:')
@@ -107,6 +112,7 @@ start = timeit.default_timer()
 data = get_MemoryMNIST(args, device=device)
 def train_Memory():
 	# Keep track of correct classifications for performance monitoring.
+	network = load_params(params_path, fname, 'model')
 	for i in range(args.n_train):
 		total_correct = 0
 		best_accuracy = -1
@@ -115,13 +121,14 @@ def train_Memory():
 			_tqdm.set_description('epoch: {}/{}'.format(i+1, args.n_train))
 			for idx in range(args.n_train):
 				# Encode current input example as Poisson spike trains.
-				x_in, target = generate_memory_spike_train_binary(args, data)
+				x_in, target = generate_memory_spike_train(args, data)
 				x_in, target = x_in.to(device), target.to(device)
 				# Run network on Poisson-encoded image data.
 				y_out = network(args.mode, x_in, args.time)
 				predictions = torch.mean(y_out, dim=0)
 				target_onehot = F.one_hot(target.long(), num_classes=args.n_output).float()[:,0,:]
 				loss = loss_fun(predictions, target_onehot)
+				# save_params(params_path, network, fname, 'model')
 				optimizer.zero_grad()
 				loss.backward()
 				optimizer.step()

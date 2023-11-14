@@ -23,3 +23,4 @@ data/
 *log
 log*
 performances/
+*.pth

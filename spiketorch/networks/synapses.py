@@ -10,6 +10,7 @@ class Synapses(nn.Module):
 		self.source = source
 		self.target = target
 
+		# self.w = nn.Parameter(torch.rand(source.n, target.n))
 		self.w = nn.Parameter(torch.rand(source.n, target.n))
 		nn.init.xavier_uniform_(self.w)
 		self.w.data *= 5
@@ -36,7 +37,7 @@ class STDPSynapses(nn.Module):
 		self.nu_post = nu_post
 		self.wmax = wmax
 		self.norm = norm
-		self.stdp_lr = 0.#1e-4
+		self.stdp_lr = 1e-1
 
 	def normalize(self):
 		'''
@@ -55,7 +56,7 @@ class STDPSynapses(nn.Module):
 
 		self.delta_w = self.stdp_lr * post + self.stdp_lr * pre
 		self.w.data += self.delta_w
-
+		
 		# Ensure that weights are within [0, self.wmax].
 		self.w.data.clamp_(0., self.wmax)	
 
@@ -91,8 +92,6 @@ if __name__ == "__main__":
 	import matplotlib.pyplot as plt
 	plt.plot(range(0,50), list_)
 	plt.show()
-
-	
 
 
 

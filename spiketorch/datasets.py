@@ -184,8 +184,11 @@ def generate_memory_spike_train(args, data):
 	X0 = torch.tensor(data[0][0]).float()
 	X1 = torch.tensor(data[1][0]).float()
 
-	length = int(args.time / args.dt)
+	length = int((args.time - args.delay - args.decision) / args.dt)
+	delay = int((args.delay) / args.dt)
+	decision = int((args.decision) / args.dt)
 	spikes = X0.float().unsqueeze(0).unsqueeze(0).repeat(length, args.batch_size, 1).clone()
+	spikes[length:length+delay, :, :] = 0.
 	targets = torch.zeros((args.batch_size, 1))
 
 	for i in range(args.batch_size):
@@ -194,11 +197,13 @@ def generate_memory_spike_train(args, data):
 		targets[i] = torch.tensor(num_1 > num_0).float()
 		indices = np.random.choice(range(length), size=num_1, replace=False)
 		spikes[indices, i, :] = X1.unsqueeze(0).repeat(num_1, 1)
-	
+		spikes[length + delay:, i, :] = X1.unsqueeze(0).repeat(decision, 1)
 	return spikes, targets
 
 def generate_memory_spike_train_binary(args, data):
-	length = int(args.time / args.dt)
+	length = int((args.time - args.delay - args.decision) / args.dt)
+	delay = int((args.delay) / args.dt)
+	decision = int((args.decision) / args.dt)
 	spikes = torch.zeros((length, args.batch_size, 1))
 	targets = torch.zeros((args.batch_size, 1))
 
@@ -206,6 +211,7 @@ def generate_memory_spike_train_binary(args, data):
 		num_0 = int(length * np.random.rand())
 		num_1 = int(length - num_0)
 		targets[i] = torch.tensor(num_1 > num_0).float()
+		spikes [length + delay:] = torch.tensor(num_1 > num_0).float()
 		indices = np.random.choice(range(length), size=num_1, replace=False)
 		spikes[indices, i, :] = 1.
 	return spikes, targets
