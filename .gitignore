@@ -24,3 +24,4 @@ data/
 log*
 performances/
 *.pth
+*.json

@@ -52,6 +52,10 @@ class InputGroup(nn.Module, Group):
 			self.x = torch.zeros((batch_size, n))  # Firing traces.
 			self.trace_tc = trace_tc  # Rate of decay of spike trace time constant.
 
+	def resets(self):
+		self.s[:] = 0.
+		self.x[:] = 0.
+
 	def forward(self, inpts):
 		'''
 		On each simulation step, set the spikes of the
@@ -73,7 +77,7 @@ class LIFGroup(nn.Module, Group):
 	Group of leaky integrate-and-fire neurons.
 	'''
 	def __init__(self, batch_size, n, traces=False, rest=0., reset=0., threshold=0.5, 
-								refractory=2, voltage_decay=1., trace_tc=5e-2, window=0.2, dt=1., tau=3):
+								refractory=2, voltage_decay=1., trace_tc=5e-2, window=0.2, dt=1., tau=5/4):
 		
 		super().__init__()
 		self.batch_size = batch_size
@@ -96,6 +100,11 @@ class LIFGroup(nn.Module, Group):
 			self.trace_tc = trace_tc  # Rate of decay of spike trace time constant.
 
 		self.refrac_count = torch.zeros((batch_size, n))  # Refractory period counters.
+
+	def resets(self):
+		self.v = self.reset * torch.ones(self.batch_size, self.n)
+		self.s[:] = 0.
+		self.x[:] = 0.
 
 	def forward(self, inpts):	
 		# Decrement refractory counters.

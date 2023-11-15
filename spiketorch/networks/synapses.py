@@ -5,18 +5,31 @@ class Synapses(nn.Module):
 	'''
 	Specifies constant synapses between two populations of neurons.
 	'''
-	def __init__(self, source, target, w=None):
+	def __init__(self, source, target, init=None, std=None, factor=None):
 		super().__init__()
 		self.source = source
 		self.target = target
-
-		# self.w = nn.Parameter(torch.rand(source.n, target.n))
-		self.w = nn.Parameter(torch.rand(source.n, target.n))
-		nn.init.xavier_uniform_(self.w)
-		self.w.data *= 5
+		
+		if init == 'uniform':
+			self.w = nn.Parameter(torch.empty(source.n, target.n))
+			nn.init.uniform_(self.w, a=-std, b=std)
+			self.b = nn.Parameter(torch.zeros([1, target.n]))
+		elif init == 'eye':
+			self.w = nn.Parameter(factor * torch.eye(source.n, target.n))
+			self.b = nn.Parameter(torch.zeros([1, target.n]))
+		elif init == 'xavier':
+			self.w = nn.Parameter((torch.empty(source.n, target.n)))
+			nn.init.xavier_uniform_(self.w)
+			self.b = nn.Parameter(torch.zeros([1, target.n]))
+		elif init == 'rand':
+			self.w = nn.Parameter((torch.rand(source.n, target.n) - 0.5) * factor)
+			self.b = nn.Parameter(torch.zeros([1, target.n]))
+		elif init == 'rand_nozeros':
+			self.w = nn.Parameter((torch.rand(source.n, target.n)) * factor)
+			self.b = nn.Parameter(torch.zeros([1, target.n]))
 
 	def forward(self, spike):
-		return spike @ self.w
+		return spike @ self.w + self.b
 
 class STDPSynapses(nn.Module):
 	'''
@@ -30,8 +43,8 @@ class STDPSynapses(nn.Module):
 
 		# self.w = nn.Parameter(torch.rand(source.n, target.n))
 		self.w = torch.rand(source.n, target.n)
-		# nn.init.xavier_uniform_(self.w)
-		self.w.data *= 5
+		nn.init.xavier_uniform_(self.w)
+		self.w.data *= 2
 
 		self.nu_pre = nu_pre
 		self.nu_post = nu_post
