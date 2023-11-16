@@ -429,7 +429,7 @@ def get_spike_abc(args, data_path=None, device=None):
 	'''
 	args.n_input = 37
 	args.n_output = 37
-	args.repeat = 5
+	args.repeat = 4
 	args.time = 11*args.repeat
 	train_images, train_labels = load_spike_abc(train=True, data_path=data_path, repeat=args.repeat)
 	test_images, test_labels = load_spike_abc(train=False, data_path=data_path, repeat=args.repeat)

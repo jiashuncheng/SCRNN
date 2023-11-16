@@ -25,7 +25,7 @@ class Synapses(nn.Module):
 			self.w = nn.Parameter((torch.rand(source.n, target.n) - 0.5) * factor)
 			self.b = nn.Parameter(torch.zeros([1, target.n]))
 		elif init == 'rand_nozeros':
-			self.w = nn.Parameter((torch.rand(source.n, target.n)) * factor)
+			self.w = nn.Parameter((torch.rand(source.n, target.n)-0.5) * factor, requires_grad=True)
 			self.b = nn.Parameter(torch.zeros([1, target.n]))
 
 	def forward(self, spike):
