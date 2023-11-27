@@ -17,9 +17,9 @@ from tqdm import tqdm
 p = Path(__file__)
 sys.path.insert(0,'{}'.format(os.path.abspath(os.path.join(os.path.dirname(__file__), "../spiketorch"))))
 
-from network import Network, MemoryNetwork, SpikeMemoryNetwork, SpikeNetwork
+from network import Network, MemoryNetwork, SpikeMemoryNetwork, SpikeNetwork, STDPSpikeMemoryNetwork
 from network import save_params, load_params
-from datasets import get_MNIST, get_spike_abc, generate_spike_train, generate_memory_spike_train, get_one_zero, get_abc
+from datasets import get_MNIST, get_spike_abc, generate_spike_train, generate_memory_spike_train, get_one_zeros, get_abc
 
 def log(info):
 	logging.info(info)
@@ -28,16 +28,16 @@ def log(info):
 parser = argparse.ArgumentParser(description='ETH (with LIF neurons) \
 					SNN toy model simulation implemented with PyTorch.')
 
-parser.add_argument('--experiment', type=str, default='abc', choices=['mnist', 'memory_mnist', 'one_zero', 'spike_abc'])
+parser.add_argument('--experiment', type=str, default='abc', choices=['mnist', 'memory_mnist', 'one_zero', 'spike_abc', 'abc'])
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--mode', type=str, default='train')
-parser.add_argument('--n_hidden', type=int, default=100)
+parser.add_argument('--n_hidden', type=int, default=50)
 parser.add_argument('--n_train', type=int, default=100)
 parser.add_argument('--n_test', type=int, default=1)
 parser.add_argument('--nu_pre', type=float, default=1e-2)
 parser.add_argument('--nu_post', type=float, default=1e-2)
 parser.add_argument('--rest', type=float, default=0.)
-parser.add_argument('--reset', type=float, default=0.)
+parser.add_argument('--reset', type=float, default=-0.1)
 parser.add_argument('--threshold', type=float, default=0.5)
 parser.add_argument('--voltage_decay', type=float, default=1)
 parser.add_argument('--refractory', type=int, default=1)
@@ -48,12 +48,12 @@ parser.add_argument('--lr', type=float, default=1e-4)
 parser.add_argument('--batch_size', type=int, default=100)
 parser.add_argument('--gpu', type=str, default='1')
 parser.add_argument('--model_name', type=str, default='eth')
-parser.add_argument('--network', type=str, default='MemoryNetwork', choices=['MemoryNetwork', 'SpikeMemoryNetwork', 'Network', 'SpikeNetwork'])
+parser.add_argument('--network', type=str, default='MemoryNetwork', choices=['MemoryNetwork', 'SpikeMemoryNetwork', 'Network', 'SpikeNetwork', 'STDPSpikeMemoryNetwork'])
 
 # one_zero task
 parser.add_argument('--sample', type=int, default=11)
-parser.add_argument('--delay', type=int, default=2)
-parser.add_argument('--decision', type=int, default=5)
+parser.add_argument('--delay', type=int, default=4)
+parser.add_argument('--decision', type=int, default=2)
 
 # Place parsed arguments in local scope.
 args = parser.parse_args()
@@ -89,29 +89,53 @@ for path in [logs_path, data_path, params_path, assign_path, results_path, perfo
 network = {'MemoryNetwork': MemoryNetwork, 
            'SpikeMemoryNetwork': SpikeMemoryNetwork,
            'Network': Network,
-           'SpikeNetwork': SpikeNetwork}
+           'SpikeNetwork': SpikeNetwork,
+           'STDPSpikeMemoryNetwork': STDPSpikeMemoryNetwork}
+
 if args.experiment == 'abc' and 'Spike' not in args.network:
 	train_data, test_data = get_abc(args, data_path=data_path,device=device)
 	model = network[args.network](args, device)
 	optimizer = optim.Adam(model.parameters(), lr=args.lr)
 	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
+ 
 elif args.experiment == 'abc' and 'Spike' in args.network:
 	train_data, test_data = get_abc(args, data_path=data_path,device=device)
 	model = network[args.network](args, device)
 	optimizer = optim.Adam(model.parameters(), lr=args.lr)
 	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
 	# loss_fun = torch.nn.MSELoss()
+ 
 elif args.experiment == 'spike_abc' and 'Spike' in args.network:
 	train_data, test_data = get_spike_abc(args, data_path=data_path,device=device)
 	model = network[args.network](args, device)
 	optimizer = optim.Adam(model.parameters(), lr=args.lr)
 	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
 	# loss_fun = torch.nn.MSELoss()
-elif args.experiment == 'one_zero':
-	train_data, test_data = get_one_zero(args, data_path=data_path, device=device)
+ 
+elif args.experiment == 'spike_abc' and 'Spike' not in args.network:
+	train_data, test_data = get_spike_abc(args, data_path=data_path,device=device)
 	model = network[args.network](args, device)
 	optimizer = optim.Adam(model.parameters(), lr=args.lr)
 	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
+	# loss_fun = torch.nn.MSELoss()
+
+elif args.experiment == 'one_zero' and 'Spike' not in args.network:
+	train_data, test_data = get_one_zeros(args, data_path=data_path, device=device)
+	model = network[args.network](args, device)
+	optimizer = optim.Adam(model.parameters(), lr=args.lr)
+	# loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
+	action_fun = torch.nn.Sigmoid()
+	loss = torch.nn.BCELoss()
+	loss_fun = lambda prediction, target : loss(action_fun(prediction), target.float())
+ 
+elif args.experiment == 'one_zero' and 'Spike' in args.network:
+	train_data, test_data = get_one_zeros(args, data_path=data_path, device=device)
+	model = network[args.network](args, device)
+	optimizer = optim.Adam(model.parameters(), lr=args.lr)
+	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
+	# action_fun = torch.nn.Sigmoid()
+	# loss = torch.nn.BCELoss()
+	# loss_fun = lambda prediction, target : loss(action_fun(prediction), target.float())
 
 # Log argument values.
 print('Optional argument values:')
@@ -152,7 +176,7 @@ def train():
 				correct = correct / args.batch_size
 				total_correct += (predictions.argmax(1) == target.argmax(1)).float().sum()
 				model.reset()
-				_tqdm.set_postfix(loss='{:.4f}, {:.4f}, {:.4f}'.format(loss, model.layer_h.w.max(), model.layer_h.w.mean()))
+				_tqdm.set_postfix(loss='{:.4f}, {:.4f}, {:.4f}, {:.4f}'.format(loss, model.layer_a.w.max(), model.layer_a.w.mean(), model.layer_h.w.max()))
 				_tqdm.update(1)
 		total_correct = total_correct / (args.batch_size * len(train_data)) 
 		if total_correct > best_accuracy:

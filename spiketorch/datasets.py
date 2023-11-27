@@ -201,29 +201,6 @@ def generate_memory_spike_train(args, data):
 
 	return spikes, targets
 
-def get_one_zero(args, data):
-	sample = int(args.sample / args.dt)
-	delay = int(args.delay / args.dt)
-	decision = int(args.decision / args.dt)
-	time = sample + delay + decision
-	spikes = torch.zeros((time, args.batch_size, 2))
-	targets = torch.zeros((args.batch_size, 1))
-	for i in range(args.batch_size):
-		num_0 = int(sample * np.random.rand())
-		num_1 = int(sample - num_0)
-		indices = np.random.choice(range(sample), size=num_1, replace=False)
-		spikes[range(sample), i, :] = torch.tensor([[1., 0.]]).repeat(sample, 1)
-		spikes[indices, i, :] = torch.tensor([[0., 1.]]).repeat(num_1, 1) # sample
-		dec = np.random.rand()
-		if dec > 0.5 :
-			spikes[sample+delay:, i, :] = torch.tensor([[0., 1.]]).repeat(decision, 1)# decision
-			targets[i] = torch.tensor(num_1 > num_0).float()
-		else:
-			spikes[sample+delay:, i, :] = torch.tensor([[1., 0.]]).repeat(decision, 1)# decision
-			targets[i] = torch.tensor(num_1 < num_0).float()
-
-	return spikes, targets
-
 def generate_spike_train(image, time):
 	'''
 	Generates Poisson spike trains based on image ink intensity.
@@ -258,8 +235,6 @@ def generate_spike_train(image, time):
 	# Return the input spike occurrence matrix.
 	return spikes
 
-
-
 def generate_2d_spike_train(image, intensity, time):
 	'''
 	Generates Poisson spike trains based on image ink intensity.
@@ -293,6 +268,115 @@ def generate_2d_spike_train(image, intensity, time):
 	# Return the input spike occurrence matrix.
 	return spikes.reshape([time, 1, n_input_sqrt, n_input_sqrt])
 
+class One_zeros(Dataset):
+	def __init__(self, data, target):
+		self.data = data
+		self.target = target
+
+	def __getitem__(self, index):
+		image = self.data[index]
+		label = self.target[index]
+		label = np.eye(2)[label.astype(np.uint8)][0]
+		return image, label
+
+	def __len__(self):
+		return len(self.data)
+
+def get_one_zeros(args, data_path=None, device=None):
+	'''
+	Read input-vector (image) and target class (label, 0-9) and return it as tensor.
+	'''
+	sample = int(args.sample / args.dt)
+	delay = int(args.delay / args.dt)
+	decision = int(args.decision / args.dt)
+	args.time = sample + delay + decision
+	args.n_input = 3
+	args.n_output = 2
+	args.repeat = 1
+	train_images, train_labels = load_one_zeros(train=True, data_path=data_path, args=args)
+	test_images, test_labels = load_one_zeros(train=False, data_path=data_path, args=args)
+	train_dataset = One_zeros(train_images, train_labels)
+	test_dataset = One_zeros(test_images, test_labels)
+
+	train_dataloader = torch.utils.data.DataLoader(train_dataset, 
+												batch_size=args.batch_size, 
+												shuffle=True, 
+												num_workers=0,
+												generator=torch.Generator(device=device))
+	test_dataloader = torch.utils.data.DataLoader(test_dataset, 
+											   batch_size=args.batch_size, 
+											   shuffle=False, 
+											   num_workers=0,
+											   generator=torch.Generator(device=device))
+
+	return train_dataloader, test_dataloader	
+
+def load_one_zeros(train=True, data_path=None, args=None):
+	'''
+	Read input-vector (image) and target class (label, 0-9) and return it as 
+	a list of tuples.
+	'''
+	fname = 'train' if train else 'test'
+
+	if os.path.isfile(os.path.join(data_path, '%s_one_zeros_%d_%d_%d.p' % (fname, args.sample, args.delay, args.decision))):
+		# Get pickled data from disk.
+		with open(os.path.join(data_path, '%s_one_zeros_%d_%d_%d.p' % (fname, args.sample, args.delay, args.decision)), 'rb') as f:
+			data = pickle.load(f)
+		X = data['X']
+		y = data['y']
+	else:
+		num_train = 60000
+		num_test = 10000
+
+		x_train = np.zeros([num_train, args.time, 3], dtype=np.float32)
+		x_test = np.zeros([num_test, args.time, 3], dtype=np.float32)
+
+		y_train = np.zeros([num_train, 1], dtype=np.float32)
+		y_test = np.zeros([num_test, 1], dtype=np.float32)
+
+		for i in range(0, num_train):
+			x_train[i], y_train[i] = get_one_zero(args)
+			print('Progress train data:', i, '/', num_train, '\n')
+
+		for i in range(0, num_test):
+			x_test[i], y_test[i] = get_one_zero(args)
+			print('Progress test data:', i, '/', num_test, '\n')
+
+		with open(os.path.join(data_path, '%s_one_zeros_%d_%d_%d.p' % ('train', args.sample, args.delay, args.decision)), 'wb') as f:
+			data = {'X': x_train, 'y': y_train}
+			pickle.dump(data, f)
+		with open(os.path.join(data_path, '%s_one_zeros_%d_%d_%d.p' % ('test', args.sample, args.delay, args.decision)), 'wb') as f:
+			data = {'X': x_test, 'y': y_test}
+			pickle.dump(data, f)
+   
+		X = x_train if fname=='train' else x_test
+		y = y_train if fname=='train' else y_test
+
+	return X, y
+
+def get_one_zero(args):
+	sample = int(args.sample / args.dt)
+	delay = int(args.delay / args.dt)
+	decision = int(args.decision / args.dt)
+	args.time = sample + delay + decision
+	spikes = torch.zeros((args.time, 3))
+	targets = torch.zeros((1))
+	num_0 = int(sample * np.random.rand())
+	num_1 = int(sample - num_0)
+	indices = np.random.choice(range(sample), size=num_1, replace=False)
+	spikes[range(sample), :] = torch.tensor([[1., 0., 0.]]).repeat(sample, 1)
+	spikes[indices, :] = torch.tensor([[0., 1., 0.]]).repeat(num_1, 1) # sample
+	spikes[sample:sample+delay, :] = torch.tensor([[0., 0., 1.]]).repeat(delay, 1) # delay
+	dec = np.random.rand()
+	if dec > 0.5 :
+		spikes[sample+delay:, :] = torch.tensor([[0., 1., 0.]]).repeat(decision, 1)# decision
+		targets = torch.tensor(num_1 > num_0).float()
+	else:
+		spikes[sample+delay:, :] = torch.tensor([[1., 0., 0.]]).repeat(decision, 1)# decision
+		targets = torch.tensor(num_1 < num_0).float()
+
+	return spikes.cpu().numpy(), targets.cpu().numpy()
+
 class ABC(Dataset):
 	def __init__(self, data, target):
 		self.data = data
@@ -305,11 +389,12 @@ class ABC(Dataset):
 
 	def __len__(self):
 		return len(self.data)
-	
+
 def get_abc(args, data_path=None, device=None):
 	'''
 	Read input-vector (image) and target class (label, 0-9) and return it as tensor.
 	'''
+	args.repeat = 1
 	args.time = 11
 	args.n_input = 37
 	args.n_output = 37
@@ -429,7 +514,7 @@ def get_spike_abc(args, data_path=None, device=None):
 	'''
 	args.n_input = 37
 	args.n_output = 37
-	args.repeat = 4
+	args.repeat = 3
 	args.time = 11*args.repeat
 	train_images, train_labels = load_spike_abc(train=True, data_path=data_path, repeat=args.repeat)
 	test_images, test_labels = load_spike_abc(train=False, data_path=data_path, repeat=args.repeat)
