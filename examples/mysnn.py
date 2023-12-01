@@ -12,12 +12,13 @@ import torch.optim as optim
 from datetime import datetime
 import torch.nn.functional as F
 from torch.autograd import Variable
-from tqdm import tqdm
+from tqdm import tqdm_notebook as tqdm
+from torch import nn
 
 p = Path(__file__)
 sys.path.insert(0,'{}'.format(os.path.abspath(os.path.join(os.path.dirname(__file__), "../spiketorch"))))
 
-from network import Network, MemoryNetwork, SpikeMemoryNetwork, SpikeNetwork, STDPSpikeMemoryNetwork
+from network import Network, MemoryNetwork, SpikeMemoryNetwork, SpikeNetwork, STDPSpikeMemoryNetwork, STDPSpikeNetwork
 from network import save_params, load_params
 from datasets import get_MNIST, get_spike_abc, generate_spike_train, generate_memory_spike_train, get_one_zeros, get_abc
 
@@ -31,7 +32,7 @@ parser = argparse.ArgumentParser(description='ETH (with LIF neurons) \
 parser.add_argument('--experiment', type=str, default='abc', choices=['mnist', 'memory_mnist', 'one_zero', 'spike_abc', 'abc'])
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--mode', type=str, default='train')
-parser.add_argument('--n_hidden', type=int, default=50)
+parser.add_argument('--n_hidden', type=int, default=200)
 parser.add_argument('--n_train', type=int, default=100)
 parser.add_argument('--n_test', type=int, default=1)
 parser.add_argument('--nu_pre', type=float, default=1e-2)
@@ -48,7 +49,7 @@ parser.add_argument('--lr', type=float, default=1e-4)
 parser.add_argument('--batch_size', type=int, default=100)
 parser.add_argument('--gpu', type=str, default='1')
 parser.add_argument('--model_name', type=str, default='eth')
-parser.add_argument('--network', type=str, default='MemoryNetwork', choices=['MemoryNetwork', 'SpikeMemoryNetwork', 'Network', 'SpikeNetwork', 'STDPSpikeMemoryNetwork'])
+parser.add_argument('--network', type=str, default='MemoryNetwork', choices=['MemoryNetwork', 'SpikeMemoryNetwork', 'Network', 'SpikeNetwork', 'STDPSpikeMemoryNetwork', 'STDPSpikeNetwork'])
 
 # one_zero task
 parser.add_argument('--sample', type=int, default=11)
@@ -90,7 +91,8 @@ network = {'MemoryNetwork': MemoryNetwork,
            'SpikeMemoryNetwork': SpikeMemoryNetwork,
            'Network': Network,
            'SpikeNetwork': SpikeNetwork,
-           'STDPSpikeMemoryNetwork': STDPSpikeMemoryNetwork}
+           'STDPSpikeMemoryNetwork': STDPSpikeMemoryNetwork,
+           'STDPSpikeNetwork': STDPSpikeNetwork}
 
 if args.experiment == 'abc' and 'Spike' not in args.network:
 	train_data, test_data = get_abc(args, data_path=data_path,device=device)
@@ -169,6 +171,7 @@ def train():
 				# save_params(params_path, model, fname, 'model')
 				optimizer.zero_grad()
 				loss.backward()
+				nn.utils.clip_grad_norm_(model.parameters(), max_norm=1, norm_type=2)
 				optimizer.step()
 				# print(model.layer_h.w.max(), model.layer_h.w.mean())
 				# If correct, increment counter variable.

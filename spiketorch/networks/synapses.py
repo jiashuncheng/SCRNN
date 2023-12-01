@@ -37,17 +37,21 @@ class STDPSynapses(nn.Module):
 	'''
 	Specifies STDP-adapted synapses between two populations of neurons.
 	'''
-	def __init__(self, source, target, batch_size=1, nu_pre=1e-2, nu_post=1e-2, wmax=1.0, norm=78.0, init=None, factor=None):
+	def __init__(self, source, target, batch_size=1, nu_pre=1e-2, nu_post=1e-2, wmax=2.5, norm=78.0, init=None, factor=None):
 		super().__init__()
 		self.source = source
 		self.target = target
 		self.batch_size = batch_size
 
 		# self.w = nn.Parameter(torch.rand(source.n, target.n))
-		self.w = torch.rand(source.n, target.n)
-		nn.init.xavier_uniform_(self.w)
-		# self.w.data *= 2
-
+		if init == 'xavier':
+			self.w = torch.rand(source.n, target.n)
+			nn.init.xavier_uniform_(self.w)
+			# self.w.data *= 2
+		elif init == 'zeros':
+			self.w = torch.zeros(source.n, target.n)
+		self.lambda_ = nn.Parameter(torch.tensor([0.9], dtype=torch.float32))
+		self.eta = nn.Parameter(torch.tensor([0.5], dtype=torch.float32))
 		self.nu_pre = nu_pre
 		self.nu_post = nu_post
 		self.wmax = wmax
@@ -70,10 +74,10 @@ class STDPSynapses(nn.Module):
 		pre = -self.nu_pre * (self.source.s.float().view(self.source.n, self.batch_size) @ self.target.x.view(self.batch_size, self.target.n))
 
 		self.delta_w = self.stdp_lr * post + self.stdp_lr * pre
-		self.w.data += self.delta_w
+		self.w.data = self.lambda_ * self.w.data + self.eta * self.delta_w
 		
 		# Ensure that weights are within [0, self.wmax].
-		self.w.data.clamp_(0., self.wmax)	
+		self.w.data.clamp_(-self.wmax, self.wmax)	
 
 	def forward(self, spike):
 		return spike.float() @ self.w

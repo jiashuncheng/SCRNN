@@ -217,12 +217,10 @@ class STDPSpikeMemoryNetwork(nn.Module):
 		self.n_hidden = args.n_hidden
 		self.n_output = args.n_output
 
-		self.lambda_ = nn.Parameter(torch.tensor([0.9], dtype=torch.float32))
-		self.eta = nn.Parameter(torch.tensor([0.5], dtype=torch.float32))
 		self.g = nn.Parameter(torch.ones([1, self.n_hidden], dtype=torch.float32))
 		self.b = nn.Parameter(torch.ones([1, self.n_hidden], dtype=torch.float32))
-		self.gamma = nn.Parameter(torch.tensor([1.0], dtype=torch.float32))
-		self.beta = nn.Parameter(torch.tensor([0.01], dtype=torch.float32))
+		# self.gamma = nn.Parameter(torch.tensor([1.0], dtype=torch.float32))
+		# self.beta = nn.Parameter(torch.tensor([0.01], dtype=torch.float32))
 
 		self.neuron_i = InputGroup(args.batch_size, args.n_input, traces=traces, dt=self.dt)
 		self.neuron_s = AdaptiveLIFGroup(args.batch_size, args.n_hidden, traces=traces, rest=args.rest, reset=args.reset, threshold=args.threshold, voltage_decay=args.voltage_decay, refractory=args.refractory, trace_tc=args.trace_tc, dt=self.dt)
@@ -244,7 +242,7 @@ class STDPSpikeMemoryNetwork(nn.Module):
 		self.layer_z = Synapses(self.neuron_s, self.neuron_z, init='rand', factor=5)
 		self.layer_c = Synapses(self.neuron_z, self.neuron_h, init='rand', factor=5)
 		self.layer_h = Synapses(self.neuron_h, self.neuron_h, init='rand', factor=5)
-		self.layer_a = STDPSynapses(self.neuron_h, self.neuron_h, init='rand', factor=5, batch_size=self.batch_size)
+		self.layer_a = STDPSynapses(self.neuron_h, self.neuron_h, init='zeros', factor=1, batch_size=self.batch_size)
 		self.layer_ho = Synapses(self.neuron_h, self.neuron_ho, init='rand', factor=5)
 		self.layer_o = Synapses(self.n_hidden, self.n_output, init='rand', factor=5)
 
@@ -262,19 +260,111 @@ class STDPSpikeMemoryNetwork(nn.Module):
 			s = self.neuron_s(self.layer_i(x))
 			z = self.neuron_z(self.layer_z(s))
 			h = self.neuron_h(self.layer_c(z) + self.layer_h(h))
-			hs = h
+			self.layer_a.update()
 
 			for step in range(5):
 				# hs = (self.layer_h(h).reshape(hs.shape) + hs @ a) + self.layer_c(z).reshape(hs.shape)
-				hs = (self.layer_h(h) + self.layer_a(h)) + self.layer_c(z)
-				mu = torch.mean(hs, 0)
-				hs = self.neuron_hs(torch.div(self.g * (hs - mu), 1.) + self.b)
-				# # Update synapse weights if we're in training mode with STDP.
+				h = (self.layer_h(h) + self.layer_a(h)) + self.layer_c(z)
+				mu = torch.mean(h, 0)
+				sig = torch.sqrt(torch.mean(torch.pow((h - mu), 2), 0))
+				h = self.neuron_hs(torch.div(self.g * (h - mu), sig) + self.b)
     
-			self.layer_a.update()
-    
-			h = hs
+			# o = self.neuron_ho(self.layer_ho(h))
+			# y = self.neuron_o(self.layer_o(o))
+			# y_out = y.reshape(1, self.batch_size, self.n_output)
 
+			if timestep >= int(time / self.dt) - self.decision:
+				o = self.neuron_ho(self.layer_ho(h))
+				y = self.neuron_o(self.layer_o(o))
+				y_out[timestep + self.decision - int(time / self.dt), :,:] = y
+    
+
+		# # Normalize synapse weights if we're in training mode.
+		# if mode == 'train' and isinstance(self.layer_h, STDPSynapses):
+		# 	self.layer_h.normalize()
+			
+		return y_out
+
+	def reset(self):
+		'''
+		Resets certain state variables.
+		'''
+		self.neuron_i.resets()
+		self.neuron_s.resets()
+		self.neuron_z.resets()
+		self.neuron_ho.resets()
+		self.neuron_hs.resets()
+		self.neuron_h.resets()
+		# self.neuron_o.resets()
+
+class STDPSpikeNetwork(nn.Module):
+	'''
+	Combines neuron groups and synapses into a spiking neural network.
+	'''
+	def __init__(self, args, device):
+		super(STDPSpikeNetwork, self).__init__()
+		traces = args.mode = 'train'
+		self.repeat = args.repeat
+		self.decision = args.decision
+		self.dt = args.dt
+		self.device = device
+		self.batch_size = args.batch_size
+		self.n_input = args.n_input
+		self.n_hidden = args.n_hidden
+		self.n_output = args.n_output
+
+		self.g = nn.Parameter(torch.ones([1, self.n_hidden], dtype=torch.float32))
+		self.b = nn.Parameter(torch.ones([1, self.n_hidden], dtype=torch.float32))
+		# self.gamma = nn.Parameter(torch.tensor([1.0], dtype=torch.float32))
+		# self.beta = nn.Parameter(torch.tensor([0.01], dtype=torch.float32))
+
+		self.neuron_i = InputGroup(args.batch_size, args.n_input, traces=traces, dt=self.dt)
+		self.neuron_s = AdaptiveLIFGroup(args.batch_size, args.n_hidden, traces=traces, rest=args.rest, reset=args.reset, threshold=args.threshold, voltage_decay=args.voltage_decay, refractory=args.refractory, trace_tc=args.trace_tc, dt=self.dt)
+		self.neuron_z = AdaptiveLIFGroup(args.batch_size, args.n_hidden, traces=traces, rest=args.rest, reset=args.reset, threshold=args.threshold, voltage_decay=args.voltage_decay, refractory=args.refractory, trace_tc=args.trace_tc, dt=self.dt)
+		self.neuron_h = AdaptiveLIFGroup(args.batch_size, args.n_hidden, traces=traces, rest=args.rest, reset=args.reset, threshold=args.threshold, voltage_decay=args.voltage_decay, refractory=args.refractory, trace_tc=args.trace_tc, dt=self.dt)
+		self.neuron_hs = AdaptiveLIFGroup(args.batch_size, args.n_hidden, traces=traces, rest=args.rest, reset=args.reset, threshold=args.threshold, voltage_decay=args.voltage_decay, refractory=args.refractory, trace_tc=args.trace_tc, dt=self.dt)
+		self.neuron_ho = AdaptiveLIFGroup(args.batch_size, args.n_hidden, traces=traces, rest=args.rest, reset=args.reset, threshold=args.threshold, voltage_decay=args.voltage_decay, refractory=args.refractory, trace_tc=args.trace_tc, dt=self.dt)
+		self.neuron_o = nn.ReLU() #AdaptiveLIFGroup(args.batch_size, args.n_output, traces=traces, rest=args.rest, reset=args.reset, threshold=args.threhold, voltage_decay=args.voltage_decay, refractory=args.refractory, trace_tc=args.trace_tc, dt=self.dt)
+
+		# Parameters of others
+		# self.layer_i = Synapses(self.neuron_i, self.neuron_s, init='uniform', std=np.sqrt(0.02))
+		# self.layer_z = Synapses(self.neuron_s, self.neuron_z, init='uniform', std=np.sqrt(0.01))
+		# self.layer_c = Synapses(self.neuron_z, self.neuron_h, init='uniform', std=np.sqrt(20))
+		# self.layer_h = Synapses(self.neuron_h, self.neuron_h, init='eye', factor=0.05)
+		# self.layer_ho = Synapses(self.neuron_h, self.neuron_ho, init='uniform', std=np.sqrt(0.01))
+		# self.layer_o = Synapses(self.neuron_ho, self.neuron_o, init='uniform', std=np.sqrt(1.0/self.n_output))
+
+		self.layer_i = Synapses(self.neuron_i, self.neuron_s, init='rand', factor=5)
+		self.layer_z = Synapses(self.neuron_s, self.neuron_z, init='rand', factor=5)
+		self.layer_c = Synapses(self.neuron_z, self.neuron_h, init='rand', factor=5)
+		self.layer_h = Synapses(self.neuron_h, self.neuron_h, init='rand', factor=5)
+		self.layer_a = STDPSynapses(self.neuron_h, self.neuron_h, init='zeros', factor=1, batch_size=self.batch_size)
+		self.layer_ho = Synapses(self.neuron_h, self.neuron_ho, init='rand', factor=5)
+		self.layer_o = Synapses(self.n_hidden, self.n_output, init='rand', factor=5)
+
+	def forward(self, mode, x_in, time):
+		'''
+		Run network for a single iteration.
+		'''
+		# # Simulate neuron and synapse activity for `time` timesteps.
+		h = torch.zeros((self.batch_size, self.n_hidden))
+		# y_out = torch.zeros((int(time / self.dt), self.batch_size, self.n_output))
+		y_out = torch.zeros((self.decision, self.batch_size, self.n_output))
+
+		for timestep in range(int(time / self.dt)):
+			x = self.neuron_i(x_in[timestep, :])
+			s = self.neuron_s(self.layer_i(x))
+			z = self.neuron_z(self.layer_z(s))
+			h = self.neuron_h(self.layer_c(z) + self.layer_h(h))
+			# self.layer_a.update()
+
+			for step in range(5):
+				# hs = (self.layer_h(h).reshape(hs.shape) + hs @ a) + self.layer_c(z).reshape(hs.shape)
+				h = (self.layer_h(h) + self.layer_a(h)) + self.layer_c(z)
+				mu = torch.mean(h, 0)
+				sig = torch.sqrt(torch.mean(torch.pow((h - mu), 2), 0))
+				h = self.neuron_hs(torch.div(self.g * (h - mu), sig) + self.b)
+    
 			# o = self.neuron_ho(self.layer_ho(h))
 			# y = self.neuron_o(self.layer_o(o))
 			# y_out = y.reshape(1, self.batch_size, self.n_output)
