@@ -13,6 +13,7 @@ class ActionFun(Function):
 	def backward(ctx, grad_output):
 		v, threshold, window, = ctx.saved_tensors
 		grad_input = grad_output.clone()
+		# print(grad_input.max(), grad_input.max())
 		temp = abs(v - threshold) < window
 		return grad_input * temp.float(), None, None
 
@@ -77,7 +78,7 @@ class LIFGroup(nn.Module, Group):
 	Group of leaky integrate-and-fire neurons.
 	'''
 	def __init__(self, batch_size, n, traces=False, rest=0., reset=0., threshold=0.5, 
-								refractory=2, voltage_decay=1., trace_tc=5e-2, window=0.2, dt=1., tau=5/4):
+								refractory=2, voltage_decay=1., trace_tc=5e-2, window=0.2, dt=1., tau=3):
 		
 		super().__init__()
 		self.batch_size = batch_size
@@ -100,29 +101,52 @@ class LIFGroup(nn.Module, Group):
 			self.trace_tc = trace_tc  # Rate of decay of spike trace time constant.
 
 		self.refrac_count = torch.zeros((batch_size, n))  # Refractory period counters.
+  
+		self.v_list = []
+		self.v_pre_list = []
+		self.v_post_list = []
+		self.s_list = []
+		self.x_list = []
+		self.s_monitor = []
+
+		self.inner_clock = 0
 
 	def resets(self):
 		self.v = self.reset * torch.ones(self.batch_size, self.n)
 		self.s[:] = 0.
 		self.x[:] = 0.
+		self.v_list = []
+		self.v_pre_list = []
+		self.v_post_list = []
+		self.s_list = []
+		self.x_list = []
+		self.s_monitor = []
+		self.inner_clock = 0
 
 	def forward(self, inpts):	
+		self.inner_clock += 1
 		# Decrement refractory counters.
 		# self.inpts = torch.ones_like(self.inpts) #test
 		# print(inpts.max(), inpts.mean(), inpts.min())
 		self.refrac_count[self.refrac_count != 0] = self.refrac_count[self.refrac_count != 0] - self.dt
 		# Integrate input and decay voltages.
-		self.v =  self.voltage_decay * self.v + (self.dt/self.tau * ( -self.v + self.rest + inpts)) * (self.refrac_count == 0).float()
+		self.v =  self.voltage_decay * self.v + (self.dt/self.tau * ( -self.v + self.rest + inpts))
 		# Check for spiking neurons.
+		self.v_pre_list.append(self.v.cpu().detach().numpy())
 		self.s = ActionFun.apply(self.v, self.threshold, self.window)
+		self.s = self.s * (self.refrac_count == 0)
+		self.s_list.append(self.s.clone())
+		self.s_monitor.append(self.s.cpu().detach().numpy())
 		self.refrac_count[self.s.bool()] = self.dt * self.refractory
 		self.v = self.v * (self.s == 0.).float() + self.reset * (self.s == 1.).float()
+		self.v_post_list.append(self.v.cpu().detach().numpy())
 
 		if self.traces:
 			# Decay spike traces.
 			self.x = self.x - self.dt * self.trace_tc * self.x
 			# Setting synaptic traces.
 			self.x[self.s.bool()] = 1.0
+		self.x_list.append(self.x.clone())
 
 		return self.s
 

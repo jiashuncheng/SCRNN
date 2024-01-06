@@ -289,10 +289,10 @@ def get_one_zeros(args, data_path=None, device=None):
 	sample = int(args.sample / args.dt)
 	delay = int(args.delay / args.dt)
 	decision = int(args.decision / args.dt)
-	args.time = sample + delay + decision
+	repeat = int(args.repeat / args.dt)
+	args.time = sample * repeat + delay + decision
 	args.n_input = 3
 	args.n_output = 2
-	args.repeat = 1
 	train_images, train_labels = load_one_zeros(train=True, data_path=data_path, args=args)
 	test_images, test_labels = load_one_zeros(train=False, data_path=data_path, args=args)
 	train_dataset = One_zeros(train_images, train_labels)
@@ -302,12 +302,12 @@ def get_one_zeros(args, data_path=None, device=None):
 												batch_size=args.batch_size, 
 												shuffle=True, 
 												num_workers=0,
-												generator=torch.Generator(device=device))
+            									generator=torch.Generator(device=device))
 	test_dataloader = torch.utils.data.DataLoader(test_dataset, 
-											   batch_size=args.batch_size, 
-											   shuffle=False, 
-											   num_workers=0,
-											   generator=torch.Generator(device=device))
+											   	batch_size=args.batch_size, 
+											   	shuffle=False, 
+											   	num_workers=0,
+              									generator=torch.Generator(device=device))
 
 	return train_dataloader, test_dataloader	
 
@@ -318,15 +318,15 @@ def load_one_zeros(train=True, data_path=None, args=None):
 	'''
 	fname = 'train' if train else 'test'
 
-	if os.path.isfile(os.path.join(data_path, '%s_one_zeros_%d_%d_%d.p' % (fname, args.sample, args.delay, args.decision))):
+	if os.path.isfile(os.path.join(data_path, '%s_one_zeros_%d_%d_%d_%d_%f.p' % (fname, args.sample, args.delay, args.decision, args.repeat, args.prop))):
 		# Get pickled data from disk.
-		with open(os.path.join(data_path, '%s_one_zeros_%d_%d_%d.p' % (fname, args.sample, args.delay, args.decision)), 'rb') as f:
+		with open(os.path.join(data_path, '%s_one_zeros_%d_%d_%d_%d_%f.p' % (fname, args.sample, args.delay, args.decision, args.repeat, args.prop)), 'rb') as f:
 			data = pickle.load(f)
 		X = data['X']
 		y = data['y']
 	else:
-		num_train = 60000
-		num_test = 10000
+		num_train = 6000
+		num_test = 1000
 
 		x_train = np.zeros([num_train, args.time, 3], dtype=np.float32)
 		x_test = np.zeros([num_test, args.time, 3], dtype=np.float32)
@@ -342,10 +342,10 @@ def load_one_zeros(train=True, data_path=None, args=None):
 			x_test[i], y_test[i] = get_one_zero(args)
 			print('Progress test data:', i, '/', num_test, '\n')
 
-		with open(os.path.join(data_path, '%s_one_zeros_%d_%d_%d.p' % ('train', args.sample, args.delay, args.decision)), 'wb') as f:
+		with open(os.path.join(data_path, '%s_one_zeros_%d_%d_%d_%d_%f.p' % ('train', args.sample, args.delay, args.decision, args.repeat, args.prop)), 'wb') as f:
 			data = {'X': x_train, 'y': y_train}
 			pickle.dump(data, f)
-		with open(os.path.join(data_path, '%s_one_zeros_%d_%d_%d.p' % ('test', args.sample, args.delay, args.decision)), 'wb') as f:
+		with open(os.path.join(data_path, '%s_one_zeros_%d_%d_%d_%d_%f.p' % ('test', args.sample, args.delay, args.decision, args.repeat, args.prop)), 'wb') as f:
 			data = {'X': x_test, 'y': y_test}
 			pickle.dump(data, f)
    
@@ -358,22 +358,242 @@ def get_one_zero(args):
 	sample = int(args.sample / args.dt)
 	delay = int(args.delay / args.dt)
 	decision = int(args.decision / args.dt)
-	args.time = sample + delay + decision
+	repeat = int(args.repeat / args.dt)
+	args.time = sample * repeat + delay + decision
 	spikes = torch.zeros((args.time, 3))
+	samples = torch.zeros((sample, 3))
 	targets = torch.zeros((1))
-	num_0 = int(sample * np.random.rand())
+	num_0 = np.random.choice([int(args.prop*sample), sample-int(args.prop*sample)])
 	num_1 = int(sample - num_0)
 	indices = np.random.choice(range(sample), size=num_1, replace=False)
-	spikes[range(sample), :] = torch.tensor([[1., 0., 0.]]).repeat(sample, 1)
-	spikes[indices, :] = torch.tensor([[0., 1., 0.]]).repeat(num_1, 1) # sample
-	spikes[sample:sample+delay, :] = torch.tensor([[0., 0., 1.]]).repeat(delay, 1) # delay
+	samples[range(sample), :] = torch.tensor([[1., 0., 0.]]).repeat(sample, 1)
+	samples[indices, :] = torch.tensor([[0., 1., 0.]]).repeat(num_1, 1) # sample
+	samples = samples.cpu().numpy()
+	samples = np.repeat(samples, repeat, axis=0)
+	spikes[:sample*repeat, :] = torch.tensor(samples)
+
+	# spikes[:sample*repeat, :] = 0. # test
+
+	spikes[sample*repeat:sample*repeat+delay, :] = torch.tensor([[0., 0., 1.]]).repeat(delay, 1) # delay
 	dec = np.random.rand()
 	if dec > 0.5 :
-		spikes[sample+delay:, :] = torch.tensor([[0., 1., 0.]]).repeat(decision, 1)# decision
+		spikes[sample*repeat+delay:, :] = torch.tensor([[0., 1., 0.]]).repeat(decision, 1)# decision
 		targets = torch.tensor(num_1 > num_0).float()
 	else:
-		spikes[sample+delay:, :] = torch.tensor([[1., 0., 0.]]).repeat(decision, 1)# decision
+		spikes[sample*repeat+delay:, :] = torch.tensor([[1., 0., 0.]]).repeat(decision, 1)# decision
 		targets = torch.tensor(num_1 < num_0).float()
+
+	return spikes.cpu().numpy(), targets.cpu().numpy()
+
+def get_one_zeros_vanillia(args, data_path=None, device=None):
+	'''
+	Read input-vector (image) and target class (label, 0-9) and return it as tensor.
+	'''
+	sample = int(args.sample / args.dt)
+	delay = int(args.delay / args.dt)
+	decision = int(args.decision / args.dt)
+	repeat = int(args.repeat / args.dt)
+	args.time = sample * repeat + delay + decision
+	args.n_input = 3
+	args.n_output = 2
+	train_images, train_labels = load_one_zeros_vanillia(train=True, data_path=data_path, args=args)
+	test_images, test_labels = load_one_zeros_vanillia(train=False, data_path=data_path, args=args)
+	train_dataset = One_zeros(train_images, train_labels)
+	test_dataset = One_zeros(test_images, test_labels)
+
+	train_dataloader = torch.utils.data.DataLoader(train_dataset, 
+												batch_size=args.batch_size, 
+												shuffle=True, 
+												num_workers=0,
+            									generator=torch.Generator(device=device))
+	test_dataloader = torch.utils.data.DataLoader(test_dataset, 
+											   	batch_size=args.batch_size, 
+											   	shuffle=False, 
+											   	num_workers=0,
+              									generator=torch.Generator(device=device))
+
+	return train_dataloader, test_dataloader	
+
+def load_one_zeros_vanillia(train=True, data_path=None, args=None):
+	'''
+	Read input-vector (image) and target class (label, 0-9) and return it as 
+	a list of tuples.
+	'''
+	fname = 'train' if train else 'test'
+
+	if os.path.isfile(os.path.join(data_path, '%s_one_zeros_vanillia_%d_%d_%d_%d_%f.p' % (fname, args.sample, args.delay, args.decision, args.repeat, args.prop))):
+		# Get pickled data from disk.
+		with open(os.path.join(data_path, '%s_one_zeros_vanillia_%d_%d_%d_%d_%f.p' % (fname, args.sample, args.delay, args.decision, args.repeat, args.prop)), 'rb') as f:
+			data = pickle.load(f)
+		X = data['X']
+		y = data['y']
+	else:
+		num_train = 6000
+		num_test = 1000
+
+		x_train = np.zeros([num_train, args.time, 3], dtype=np.float32)
+		x_test = np.zeros([num_test, args.time, 3], dtype=np.float32)
+
+		y_train = np.zeros([num_train, 1], dtype=np.float32)
+		y_test = np.zeros([num_test, 1], dtype=np.float32)
+
+		for i in range(0, num_train):
+			x_train[i], y_train[i] = get_one_zero_vanillia(args)
+			print('Progress train data:', i, '/', num_train, '\n')
+
+		for i in range(0, num_test):
+			x_test[i], y_test[i] = get_one_zero_vanillia(args)
+			print('Progress test data:', i, '/', num_test, '\n')
+
+		with open(os.path.join(data_path, '%s_one_zeros_vanillia_%d_%d_%d_%d_%f.p' % ('train', args.sample, args.delay, args.decision, args.repeat, args.prop)), 'wb') as f:
+			data = {'X': x_train, 'y': y_train}
+			pickle.dump(data, f)
+		with open(os.path.join(data_path, '%s_one_zeros_vanillia_%d_%d_%d_%d_%f.p' % ('test', args.sample, args.delay, args.decision, args.repeat, args.prop)), 'wb') as f:
+			data = {'X': x_test, 'y': y_test}
+			pickle.dump(data, f)
+   
+		X = x_train if fname=='train' else x_test
+		y = y_train if fname=='train' else y_test
+
+	return X, y
+
+def get_one_zero_vanillia(args):
+	sample = int(args.sample / args.dt)
+	delay = int(args.delay / args.dt)
+	decision = int(args.decision / args.dt)
+	repeat = int(args.repeat / args.dt)
+	args.time = sample * repeat + delay + decision
+	spikes = torch.zeros((args.time, 3))
+	samples = torch.zeros((sample, 3))
+	targets = torch.zeros((1))
+	num_0 = np.random.choice([int(args.prop*sample), sample-int(args.prop*sample)])
+	num_1 = int(sample - num_0)
+	indices = np.random.choice(range(sample), size=num_1, replace=False)
+	samples[range(sample), :] = torch.tensor([[1., 0., 0.]]).repeat(sample, 1)
+	samples[indices, :] = torch.tensor([[0., 1., 0.]]).repeat(num_1, 1) # sample
+	samples = samples.cpu().numpy()
+	samples = np.repeat(samples, repeat, axis=0)
+	spikes[:sample*repeat, :] = torch.tensor(samples)
+
+	# spikes[:sample*repeat, :] = 0. # test
+
+	spikes[sample*repeat:sample*repeat+delay, :] = torch.tensor([[0., 0., 0.]]).repeat(delay, 1) # delay
+	spikes[sample*repeat+delay:, :] = torch.tensor([[0., 0., 1.]]).repeat(decision, 1)# decision
+	if num_1 > num_0 :
+		targets = torch.tensor(1).float()
+	else:
+		targets = torch.tensor(0).float()
+
+	return spikes.cpu().numpy(), targets.cpu().numpy()
+
+def get_one_zeros_ab(args, data_path=None, device=None):
+	'''
+	Read input-vector (image) and target class (label, 0-9) and return it as tensor.
+	'''
+	sample = int(args.sample / args.dt)
+	delay = int(args.delay / args.dt)
+	decision = int(args.decision / args.dt)
+	repeat = int(args.repeat / args.dt)
+	args.time = sample * repeat + delay + decision
+	args.n_input = 6
+	args.n_output = 2
+	train_images, train_labels = load_one_zeros_ab(train=True, data_path=data_path, args=args)
+	test_images, test_labels = load_one_zeros_ab(train=False, data_path=data_path, args=args)
+	train_dataset = One_zeros(train_images, train_labels)
+	test_dataset = One_zeros(test_images, test_labels)
+
+	train_dataloader = torch.utils.data.DataLoader(train_dataset, 
+												batch_size=args.batch_size, 
+												shuffle=True, 
+												num_workers=0,
+            									generator=torch.Generator(device=device))
+	test_dataloader = torch.utils.data.DataLoader(test_dataset, 
+											   	batch_size=args.batch_size, 
+											   	shuffle=False, 
+											   	num_workers=0,
+              									generator=torch.Generator(device=device))
+
+	return train_dataloader, test_dataloader
+
+def load_one_zeros_ab(train=True, data_path=None, args=None):
+	'''
+	Read input-vector (image) and target class (label, 0-9) and return it as 
+	a list of tuples.
+	'''
+	fname = 'train' if train else 'test'
+
+	if os.path.isfile(os.path.join(data_path, '%s_one_zeros_ab_%d_%d_%d_%d_%f_%f_%f.p' % (fname, args.sample, args.delay, args.decision, args.repeat, args.prop, args.prop_0_a, args.prop_1_a))):
+		# Get pickled data from disk.
+		with open(os.path.join(data_path, '%s_one_zeros_ab_%d_%d_%d_%d_%f_%f_%f.p' % (fname, args.sample, args.delay, args.decision, args.repeat, args.prop, args.prop_0_a, args.prop_1_a)), 'rb') as f:
+			data = pickle.load(f)
+		X = data['X']
+		y = data['y']
+	else:
+		num_train = 6000
+		num_test = 1000
+
+		x_train = np.zeros([num_train, args.time, 6], dtype=np.float32)
+		x_test = np.zeros([num_test, args.time, 6], dtype=np.float32)
+
+		y_train = np.zeros([num_train, 1], dtype=np.float32)
+		y_test = np.zeros([num_test, 1], dtype=np.float32)
+
+		for i in range(0, num_train):
+			x_train[i], y_train[i] = get_one_zero_ab(args)
+			print('Progress train data:', i, '/', num_train, '\n')
+
+		for i in range(0, num_test):
+			x_test[i], y_test[i] = get_one_zero_ab(args)
+			print('Progress test data:', i, '/', num_test, '\n')
+
+		with open(os.path.join(data_path, '%s_one_zeros_ab_%d_%d_%d_%d_%f_%f_%f.p' % ('train', args.sample, args.delay, args.decision, args.repeat, args.prop, args.prop_0_a, args.prop_1_a)), 'wb') as f:
+			data = {'X': x_train, 'y': y_train}
+			pickle.dump(data, f)
+		with open(os.path.join(data_path, '%s_one_zeros_ab_%d_%d_%d_%d_%f_%f_%f.p' % ('test', args.sample, args.delay, args.decision, args.repeat, args.prop, args.prop_0_a, args.prop_1_a)), 'wb') as f:
+			data = {'X': x_test, 'y': y_test}
+			pickle.dump(data, f)
+   
+		X = x_train if fname=='train' else x_test
+		y = y_train if fname=='train' else y_test
+
+	return X, y
+
+def get_one_zero_ab(args):
+	sample = int(args.sample / args.dt)
+	mice = int(args.sample / args.dt)
+	delay = int(args.delay / args.dt)
+	decision = int(args.decision / args.dt)
+	repeat = int(args.repeat / args.dt)
+	args.time = sample * repeat + delay + decision
+	mice_delay = args.time - mice
+	spikes = torch.zeros((args.time, 6))
+	samples = torch.zeros((sample, 6))
+	targets = torch.zeros((1))
+	num_0 = np.random.choice([int(args.prop*sample), sample-int(args.prop*sample)])
+	num_1 = int(sample - num_0)
+	mice_0_a = np.random.choice([int(args.prop_0_a*num_0), int(args.prop_1_a*num_1)])
+	mice_1_a = list(set([int(args.prop_0_a*num_0), int(args.prop_1_a*num_1)]).difference(set([mice_0_a])))[0]
+
+	samples[range(sample), :] = torch.tensor([[1., 0., 0., 0., 1., 0.]]).repeat(sample, 1) # sample_0_b
+	indices = np.random.choice(range(sample), size=num_1, replace=False)
+	indices_1_a = np.random.choice(indices, size=mice_1_a, replace=False)
+	samples[indices, :] = torch.tensor([[0., 1., 0., 0., 1., 0.]]).repeat(num_1, 1) # sample_1_b
+	samples[indices_1_a, :] = torch.tensor([[0., 1., 0., 1., 0., 0.]]).repeat(mice_1_a, 1) # sample_1_a
+	indices_0 = list(set(range(sample)).difference(set(indices)))
+	indices_0_a = np.random.choice(indices_0, size=mice_0_a, replace=False)
+	samples[indices_0_a, :] = torch.tensor([[1., 0., 0., 1., 0., 0.]]).repeat(mice_0_a, 1) # sample_0_a
+	samples = samples.cpu().numpy()
+	samples = np.repeat(samples, repeat, axis=0)
+	spikes[:sample*repeat, :] = torch.tensor(samples)
+
+	spikes[sample*repeat:sample*repeat+delay, :] = torch.tensor([[0., 0., 1., 0., 0., 1.]]).repeat(delay, 1) # delay
+	dec = np.random.rand()
+	if dec > 0.5 :
+		spikes[sample*repeat+delay:, :] = torch.tensor([[0., 1., 0., 0., 0., 1.]]).repeat(decision, 1)# decision
+		targets = torch.tensor(mice_1_a > mice_0_a).float()
+	else:
+		spikes[sample*repeat+delay:, :] = torch.tensor([[1., 0., 0., 0., 0., 1.]]).repeat(decision, 1)# decision
+		targets = torch.tensor(mice_1_a < mice_0_a).float()
 
 	return spikes.cpu().numpy(), targets.cpu().numpy()
 

@@ -1,3 +1,7 @@
+*
+!*.py
+!*.md
+
 # Cache folders
 .vscode/
 .idea/
