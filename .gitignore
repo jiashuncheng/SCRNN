@@ -1,6 +1,6 @@
 *
-!*.py
-!*.md
+!/*.py
+!/*.md
 
 # Cache folders
 .vscode/
