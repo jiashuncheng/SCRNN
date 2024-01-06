@@ -46,7 +46,7 @@ parser.add_argument('--wmax', type=float, default=10.0)
 parser.add_argument('--dt', type=float, default=1)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--batch_size', type=int, default=100)
-parser.add_argument('--gpu', type=str, default='1')
+parser.add_argument('--gpu', type=str, default=None)
 parser.add_argument('--model_name', type=str, default='eth')
 parser.add_argument('--network', type=str, default='MemoryNetwork')
 parser.add_argument('--layer_A', action='store_true')
@@ -68,8 +68,8 @@ np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 np.set_printoptions(threshold=sys.maxsize, linewidth=200)
 torch.set_printoptions(threshold=sys.maxsize, linewidth=100, edgeitems=10)
-os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 if args.gpu is not None:
+	os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 	assert torch.cuda.is_available()
 	torch.cuda.manual_seed(args.seed)
 	device = torch.device("cuda:0")
