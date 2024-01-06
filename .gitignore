@@ -3,4 +3,4 @@
 !*.md
 !*.ipynb
 !requirements.txt
-!*.png, *.jpg
+!*.png
