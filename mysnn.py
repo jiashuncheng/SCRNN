@@ -7,11 +7,8 @@ import logging
 import argparse
 import numpy as np
 import pickle
-import pandas as pd
 import torch.optim as optim
-from datetime import datetime
 import torch.nn.functional as F
-from torch.autograd import Variable
 from tqdm import tqdm
 import torch
 
