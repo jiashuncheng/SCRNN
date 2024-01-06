@@ -16,10 +16,9 @@ from tqdm import tqdm
 import torch
 
 p = Path(__file__)
-sys.path.insert(0,'{}'.format(os.path.abspath(os.path.join(os.path.dirname(__file__), "../spiketorch"))))
+sys.path.insert(0,'{}'.format(os.path.abspath(os.path.join(os.path.dirname(__file__), "networks"))))
 
 from network import *
-from network import save_params, load_params
 from datasets import *
 
 def log(info):
