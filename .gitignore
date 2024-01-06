@@ -1,31 +1,4 @@
-*
-!/*.py
-!/*.md
-
-# Cache folders
-.vscode/
-.idea/
-__pycache__/
-*/__pycache__/
-.mypy_cache/
-PySNN.egg-info/
-pysnn.egg-info/
-
-# Virtualenv
-venv/
-
-# Other folders
-docsrc/_build/
-experiments/
-build/
-dist/
-*/runs/
-
-# Files
-data/
-*.npy
-*log
-log*
-performances/
-*.pth
-*.json
+*.*
+!*.py
+!*.md
+!*.ipynb
