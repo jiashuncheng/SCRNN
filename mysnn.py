@@ -78,12 +78,12 @@ if args.gpu is not None:
 else:
 	device = torch.device("cpu")
 
-logs_path = os.path.join(p.parent.parent, 'results',args.model_name, 'logs')
-params_path = os.path.join(p.parent.parent, 'results',args.model_name, 'params')
-results_path = os.path.join(p.parent.parent, 'results',args.model_name, 'results')
-assign_path = os.path.join(p.parent.parent, 'results',args.model_name, 'assignments')
-perform_path = os.path.join(p.parent.parent, 'results',args.model_name, 'performances')
-data_path = os.path.join(p.parent.parent, 'data', args.experiment)
+logs_path = os.path.join('results',args.model_name, 'logs')
+params_path = os.path.join('results',args.model_name, 'params')
+results_path = os.path.join('results',args.model_name, 'results')
+assign_path = os.path.join('results',args.model_name, 'assignments')
+perform_path = os.path.join('results',args.model_name, 'performances')
+data_path = os.path.join('data', args.experiment)
 
 # Build filename from command-line arguments.
 fname = '_'.join([str(args.n_hidden), str(args.n_train), str(args.seed), str(args.wmax)])
