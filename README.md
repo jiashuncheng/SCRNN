@@ -1,7 +1,7 @@
 # MANN (Memory-augmented neural network )
 The model of the network is
 
-![Model]()
+![Model](https://github.com/jiashuncheng/MANN/blob/master/images/model.png)
 
 [1] SpikeTorch : <https://github.com/djsaunde/spiketorch>
 
