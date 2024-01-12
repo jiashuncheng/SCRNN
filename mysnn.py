@@ -11,6 +11,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from tqdm import tqdm
 import torch
+import random
 
 p = Path(__file__)
 sys.path.insert(0,'{}'.format(os.path.abspath(os.path.join(os.path.dirname(__file__), "networks"))))
@@ -25,7 +26,7 @@ def log(info):
 parser = argparse.ArgumentParser(description='ETH (with LIF neurons) \
 					SNN toy model simulation implemented with PyTorch.')
 
-parser.add_argument('--experiment', type=str, default='abc', choices=['mnist', 'memory_mnist', 'one_zero', 'spike_abc', 'abc', 'one_zero_vanillia', 'one_zero_ab'])
+parser.add_argument('--experiment', type=str, default='abc')
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--mode', type=str, default='train')
 parser.add_argument('--n_hidden', type=int, default=400)
@@ -49,6 +50,7 @@ parser.add_argument('--network', type=str, default='MemoryNetwork')
 parser.add_argument('--layer_A', action='store_true')
 
 # one_zero task
+parser.add_argument('--analyse_pre', type=int, default=10)
 parser.add_argument('--sample', type=int, default=20)
 parser.add_argument('--delay', type=int, default=20)
 parser.add_argument('--decision', type=int, default=1)
@@ -56,9 +58,13 @@ parser.add_argument('--repeat', type=int, default=1)
 parser.add_argument('--prop', type=float, default=0.5)
 parser.add_argument('--prop_0_a', type=float, default=0.8)
 parser.add_argument('--prop_1_a', type=float, default=0.4)
+parser.add_argument('--mu', type=float, default=0.)
+parser.add_argument('--sigma', type=float, default=0.05)
 
 # Place parsed arguments in local scope.
 args = parser.parse_args()
+if 'analyse' in args.experiment:
+	args.mode = 'analyse'
 
 # Set random number generator.
 np.random.seed(args.seed)
@@ -75,16 +81,14 @@ if args.gpu is not None:
 else:
 	device = torch.device("cpu")
 
-logs_path = os.path.join('results',args.model_name, 'logs')
+logs_path = os.path.join(p.parent, 'results',args.model_name, 'logs')
 params_path = os.path.join('results',args.model_name, 'params')
-results_path = os.path.join('results',args.model_name, 'results')
-assign_path = os.path.join('results',args.model_name, 'assignments')
-perform_path = os.path.join('results',args.model_name, 'performances')
+model_path = os.path.join('results',args.model_name, 'model')
 data_path = os.path.join('data', args.experiment)
 
 # Build filename from command-line arguments.
 fname = '_'.join([str(args.n_hidden), str(args.n_train), str(args.seed), str(args.wmax)])
-for path in [logs_path, data_path, params_path, assign_path, results_path, perform_path]:
+for path in [logs_path, data_path, params_path, model_path]:
 	if not os.path.isdir(path):
 		os.makedirs(path)
   
@@ -128,6 +132,14 @@ elif args.experiment == 'one_zero' and 'Spike' not in args.network:
 
 elif args.experiment == 'one_zero_ab' and 'Spike' not in args.network:
 	train_data, test_data = get_one_zeros_ab(args, data_path=data_path, device=device)
+	if 'Memory' in args.network:
+		args.n_input = args.n_input // 2
+	model = eval(args.network)(args, device)
+	optimizer = optim.Adam(model.parameters(), lr=args.lr)
+	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
+
+elif args.experiment == 'one_zero_ab_analyse' and 'Spike' not in args.network:
+	train_data, test_data = get_one_zeros_ab_analyse(args, data_path=data_path, device=device)
 	if 'Memory' in args.network:
 		args.n_input = args.n_input // 2
 	model = eval(args.network)(args, device)
@@ -221,6 +233,8 @@ def train():
 		log('Training progress (%d/%d): Finish - Elapsed time: %.4f h' % (i+1, args.n_train, (timeit.default_timer() - start)/3600))
 		log('Current training total accuracy: %.4f' % (total_correct))
 		test(i, model)
+	print('save model')
+	torch.save(model.state_dict(), model_path + '/save.pt')
 
 def test(i, model):
 	model.eval()
@@ -241,6 +255,34 @@ def test(i, model):
 		total_correct = total_correct / (args.batch_size * len(test_data))
 
 		log('Test accuracy: %.4f\n' % (total_correct))
+
+def analyse():
+	model.load_state_dict(torch.load(model_path + '/save.pt'))
+	if False:
+		# model.layer_ao.w.data *= 0. # 切断ACC
+		model.layer_ro.w.data *= 0. # 切断ATN
+	model.eval()
+	with torch.no_grad():
+		total_correct = 0
+		correct = 0
+		with tqdm(total=len(test_data), ncols=100) as _tqdm:
+			for idx, (image, target) in enumerate(test_data):
+				x_in, target = image.permute(1,0,2).to(device), target.to(device)
+				x_in = x_in + torch.normal(mean=args.mu, std=args.sigma, size=x_in.shape)
+				y_out = model('analyse', x_in, args.time)
+				predictions = torch.mean(y_out, dim=0)
+				correct = (predictions.argmax(1) == target.argmax(1)).float().sum()
+				correct = correct / args.batch_size
+				total_correct += (predictions.argmax(1) == target.argmax(1)).float().sum()
+				if False:
+					with open('/home/jiashuncheng/code/MANN/plot/data/rsc_h_norm_witchout_b_2.pkl', 'wb') as a:
+						pickle.dump(model.neuron_o.h, a)
+					sys.exit()
+				model.reset()
+				_tqdm.update(1)
+		total_correct = total_correct / (args.batch_size * len(test_data))
+
+		log('Analyse accuracy: %.4f\n' % (total_correct))
 
 def train_MNIST():
 	train_data, test_data = get_MNIST(args, device=device)
@@ -281,5 +323,5 @@ def train_MNIST():
 if __name__ == "__main__":
 	if args.mode == 'train':
 		train()
-	elif args.mode == 'test':
-		test()
+	elif args.mode == 'analyse':
+		analyse()

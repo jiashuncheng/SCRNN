@@ -3,6 +3,7 @@ import os, sys
 import numpy as np
 import torch.nn as nn
 from collections import OrderedDict
+import pickle
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -605,6 +606,10 @@ class SimpleMemoryNetwork_6(nn.Module):
 		self.n_hidden = args.n_hidden
 		self.n_output = args.n_output
 		self.layer_A = args.layer_A
+		self.analyse_pre = args.analyse_pre // self.dt
+		self.sample = args.sample // self.dt
+		self.repeat = args.repeat // self.dt
+		self.decision = args.decision // self.dt
 
 		self.lambda_ = nn.Parameter(torch.tensor([0.9], dtype=torch.float32))
 		self.eta = nn.Parameter(torch.tensor([0.5], dtype=torch.float32))
@@ -614,6 +619,7 @@ class SimpleMemoryNetwork_6(nn.Module):
 		self.neuron_a = nn.ReLU() # ACC
 		self.neuron_r = nn.ReLU() # ATN
 		self.neuron_o = nn.ReLU() # RSC
+		self.neuron_o.h = []
 
 		self.layer_sr = Synapses(self.n_input, self.n_hidden, init='xavier')
 		self.layer_ma = Synapses(self.n_input, self.n_hidden, init='xavier')
@@ -628,6 +634,8 @@ class SimpleMemoryNetwork_6(nn.Module):
 		a = torch.zeros((self.batch_size, self.n_hidden))
 		o = torch.zeros((self.batch_size, 1, self.n_hidden))
 		A = torch.zeros((self.batch_size, self.n_hidden, self.n_hidden))
+		y_out = torch.zeros((self.decision, self.batch_size, self.n_output))
+		aa = []
 
 		for timestep in range(int(time / self.dt)):
 			if x_in.shape[2] == 6:
@@ -641,16 +649,34 @@ class SimpleMemoryNetwork_6(nn.Module):
 			mu = torch.mean(o, 0)
 			sig = torch.sqrt(torch.mean(torch.pow((o - mu), 2), 0) + 1e-1)
 			o = self.neuron_o(torch.div(self.g * (o - mu), sig) + self.b)
-			if self.layer_A:
+			self.neuron_o.h.append(o.cpu().detach().numpy())
+			# if mode != 'analyse' and self.layer_A:
+			# 	A = self.lambda_ * A + self.eta * o.transpose(1,2) @ r.reshape(o.shape)
+			# elif mode == 'analyse' and timestep >= self.analyse_pre and timestep <= (self.sample * self.repeat):
+			# 	A = self.lambda_ * A + self.eta * o.transpose(1,2) @ r.reshape(o.shape)
+			if timestep >= self.analyse_pre and timestep <= (self.sample * self.repeat):
 				A = self.lambda_ * A + self.eta * o.transpose(1,2) @ r.reshape(o.shape)
 
-		y = self.layer_y(o.reshape(self.batch_size, self.n_hidden))
-		y_out = y.reshape([1, self.batch_size, self.n_output])
+			if self.decision > 1 and timestep >= int(time / self.dt) - self.decision:
+				y = self.layer_y(o.reshape(self.batch_size, self.n_hidden))
+				y_out[timestep + self.decision - int(time / self.dt), :,:] = y.reshape([self.batch_size, self.n_output])
+			aa.append(A.cpu().numpy())
+			if True:
+				A *= 0.
+			
+		if False:
+			with open('/home/jiashuncheng/code/MANN/plot/data/A_5(1).pkl', 'wb') as a:
+				pickle.dump(np.stack(aa), a)
+			sys.exit()
+
+		if self.decision == 1:
+			y = self.layer_y(o.reshape(self.batch_size, self.n_hidden))
+			y_out = y.reshape([1, self.batch_size, self.n_output])
 			
 		return y_out
 
 	def reset(self):
-		pass
+		self.neuron_o.h = []
 
 class SimpleRNNNetwork(nn.Module):
 	def __init__(self, args, device):

@@ -22,7 +22,7 @@ class Synapses(nn.Module):
 		elif init == 'xavier':
 			self.w = nn.Parameter((torch.empty(n_source, n_target)))
 			nn.init.xavier_uniform_(self.w)
-			self.b = nn.Parameter(torch.zeros([1, n_target]))
+			# self.b = nn.Parameter(torch.zeros([1, n_target]))
 		elif init == 'rand':
 			self.w = nn.Parameter((torch.rand(n_source, n_target) - 0.5) * factor)
 			self.b = nn.Parameter(torch.zeros([1, n_target]))
