@@ -650,10 +650,6 @@ class SimpleMemoryNetwork_6(nn.Module):
 			sig = torch.sqrt(torch.mean(torch.pow((o - mu), 2), 0) + 1e-1)
 			o = self.neuron_o(torch.div(self.g * (o - mu), sig) + self.b)
 			self.neuron_o.h.append(o.cpu().detach().numpy())
-			# if mode != 'analyse' and self.layer_A:
-			# 	A = self.lambda_ * A + self.eta * o.transpose(1,2) @ r.reshape(o.shape)
-			# elif mode == 'analyse' and timestep >= self.analyse_pre and timestep <= (self.sample * self.repeat):
-			# 	A = self.lambda_ * A + self.eta * o.transpose(1,2) @ r.reshape(o.shape)
 			if timestep >= self.analyse_pre and timestep <= (self.sample * self.repeat):
 				A = self.lambda_ * A + self.eta * o.transpose(1,2) @ r.reshape(o.shape)
 
@@ -661,7 +657,7 @@ class SimpleMemoryNetwork_6(nn.Module):
 				y = self.layer_y(o.reshape(self.batch_size, self.n_hidden))
 				y_out[timestep + self.decision - int(time / self.dt), :,:] = y.reshape([self.batch_size, self.n_output])
 			aa.append(A.cpu().numpy())
-			if True:
+			if False:
 				A *= 0.
 			
 		if False:

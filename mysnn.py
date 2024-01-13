@@ -277,6 +277,7 @@ def analyse():
 				if False:
 					with open('/home/jiashuncheng/code/MANN/plot/data/rsc_h_norm_witchout_b_2.pkl', 'wb') as a:
 						pickle.dump(model.neuron_o.h, a)
+						pickle.dump(target, a)
 					sys.exit()
 				model.reset()
 				_tqdm.update(1)
