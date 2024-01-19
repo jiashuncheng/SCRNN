@@ -610,6 +610,9 @@ class SimpleMemoryNetwork_6(nn.Module):
 		self.sample = args.sample // self.dt
 		self.repeat = args.repeat // self.dt
 		self.decision = args.decision // self.dt
+		self.experiment = args.experiment
+		self.store_A_state = args.store_A_state
+		self.cut_atn_to_rsc = args.cut_atn_to_rsc
 
 		self.lambda_ = nn.Parameter(torch.tensor([0.9], dtype=torch.float32))
 		self.eta = nn.Parameter(torch.tensor([0.5], dtype=torch.float32))
@@ -630,11 +633,11 @@ class SimpleMemoryNetwork_6(nn.Module):
 		self.layer_y = Synapses(self.n_hidden, self.n_output, init='xavier')
 
 	def forward(self, mode, x_in, time):
-		r = torch.zeros((self.batch_size, self.n_hidden))
-		a = torch.zeros((self.batch_size, self.n_hidden))
-		o = torch.zeros((self.batch_size, 1, self.n_hidden))
-		A = torch.zeros((self.batch_size, self.n_hidden, self.n_hidden))
-		y_out = torch.zeros((self.decision, self.batch_size, self.n_output))
+		r = torch.zeros((self.batch_size, self.n_hidden)).to(self.device)
+		a = torch.zeros((self.batch_size, self.n_hidden)).to(self.device)
+		o = torch.zeros((self.batch_size, 1, self.n_hidden)).to(self.device)
+		A = torch.zeros((self.batch_size, self.n_hidden, self.n_hidden)).to(self.device)
+		y_out = torch.zeros((self.decision, self.batch_size, self.n_output)).to(self.device)
 		aa = []
 
 		for timestep in range(int(time / self.dt)):
@@ -650,18 +653,19 @@ class SimpleMemoryNetwork_6(nn.Module):
 			sig = torch.sqrt(torch.mean(torch.pow((o - mu), 2), 0) + 1e-1)
 			o = self.neuron_o(torch.div(self.g * (o - mu), sig) + self.b)
 			self.neuron_o.h.append(o.cpu().detach().numpy())
-			if timestep >= self.analyse_pre and timestep <= (self.sample * self.repeat):
+			if self.layer_A and timestep >= self.analyse_pre and timestep <= (self.sample * self.repeat):
 				A = self.lambda_ * A + self.eta * o.transpose(1,2) @ r.reshape(o.shape)
 
 			if self.decision > 1 and timestep >= int(time / self.dt) - self.decision:
 				y = self.layer_y(o.reshape(self.batch_size, self.n_hidden))
 				y_out[timestep + self.decision - int(time / self.dt), :,:] = y.reshape([self.batch_size, self.n_output])
-			aa.append(A.cpu().numpy())
-			if False:
+
+			if mode == 'analyse' and self.store_A_state:
+				aa.append(A.cpu().detach())
+			if mode == 'analyse' and self.cut_atn_to_rsc:
 				A *= 0.
-			
-		if False:
-			with open('/home/jiashuncheng/code/MANN/plot/data/A_5(1).pkl', 'wb') as a:
+		if mode == 'analyse' and self.store_A_state:
+			with open('/home/jiashuncheng/code/MANN/plot/data/A_6.pkl', 'wb') as a:
 				pickle.dump(np.stack(aa), a)
 			sys.exit()
 
@@ -694,7 +698,7 @@ class SimpleRNNNetwork(nn.Module):
 		self.layer_y = Synapses(self.n_hidden, self.n_output, init='xavier')
 
 	def forward(self, mode, x_in, time):
-		r = torch.zeros((self.batch_size, self.n_hidden))
+		r = torch.zeros((self.batch_size, self.n_hidden)).to(self.device)
 
 		for timestep in range(int(time / self.dt)):
 			r = self.layer_sr(x_in[timestep, :]) + self.layer_r(r)

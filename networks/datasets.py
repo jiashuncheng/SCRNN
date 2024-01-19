@@ -506,13 +506,11 @@ def get_one_zeros_ab(args, data_path=None, device=None):
 	train_dataloader = torch.utils.data.DataLoader(train_dataset, 
 												batch_size=args.batch_size, 
 												shuffle=True, 
-												num_workers=0,
-            									generator=torch.Generator(device=device))
+												num_workers=0)
 	test_dataloader = torch.utils.data.DataLoader(test_dataset, 
 											   	batch_size=args.batch_size, 
 											   	shuffle=False, 
-											   	num_workers=0,
-              									generator=torch.Generator(device=device))
+											   	num_workers=0)
 
 	return train_dataloader, test_dataloader
 

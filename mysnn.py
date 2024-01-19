@@ -50,9 +50,9 @@ parser.add_argument('--network', type=str, default='MemoryNetwork')
 parser.add_argument('--layer_A', action='store_true')
 
 # one_zero task
-parser.add_argument('--analyse_pre', type=int, default=10)
+parser.add_argument('--analyse_pre', type=int, default=0)
 parser.add_argument('--sample', type=int, default=20)
-parser.add_argument('--delay', type=int, default=20)
+parser.add_argument('--delay', type=int, default=100)
 parser.add_argument('--decision', type=int, default=1)
 parser.add_argument('--repeat', type=int, default=1)
 parser.add_argument('--prop', type=float, default=0.5)
@@ -60,6 +60,12 @@ parser.add_argument('--prop_0_a', type=float, default=0.8)
 parser.add_argument('--prop_1_a', type=float, default=0.4)
 parser.add_argument('--mu', type=float, default=0.)
 parser.add_argument('--sigma', type=float, default=0.05)
+
+# analyse
+parser.add_argument('--store_h_state', action='store_true')
+parser.add_argument('--store_A_state', action='store_true')
+parser.add_argument('--cut_atn_to_rsc', action='store_true')
+parser.add_argument('--cut_acc_to_rsc', action='store_true')
 
 # Place parsed arguments in local scope.
 args = parser.parse_args()
@@ -77,17 +83,17 @@ if args.gpu is not None:
 	torch.cuda.manual_seed(args.seed)
 	device = torch.device("cuda:0")
 	torch.set_default_dtype(torch.float32)
-	torch.set_default_device(device)
+	# torch.set_default_device(device)
 else:
 	device = torch.device("cpu")
 
 logs_path = os.path.join(p.parent, 'results',args.model_name, 'logs')
-params_path = os.path.join('results',args.model_name, 'params')
-model_path = os.path.join('results',args.model_name, 'model')
-data_path = os.path.join('data', args.experiment)
+params_path = os.path.join(p.parent, 'results',args.model_name, 'params')
+model_path = os.path.join(p.parent, 'results',args.model_name, 'model')
+data_path = os.path.join(p.parent, 'data', args.experiment)
 
 # Build filename from command-line arguments.
-fname = '_'.join([str(args.n_hidden), str(args.n_train), str(args.seed), str(args.wmax)])
+fname = '_'.join([str(args.n_hidden), str(args.n_train), str(args.seed), str(args.experiment), str(args.cut_acc_to_rsc), str(args.cut_atn_to_rsc), str(args.layer_A)])
 for path in [logs_path, data_path, params_path, model_path]:
 	if not os.path.isdir(path):
 		os.makedirs(path)
@@ -120,15 +126,21 @@ elif args.experiment == 'spike_abc' and 'Spike' not in args.network:
 	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
 	# loss_fun = torch.nn.MSELoss()
 
-elif args.experiment == 'one_zero' and 'Spike' not in args.network:
+elif args.experiment == 'one_zero' and 'Spike' in args.network:
 	train_data, test_data = get_one_zeros(args, data_path=data_path, device=device)
-	# model = network[args.network](args, device)
 	model = eval(args.network)(args, device)
 	optimizer = optim.Adam(model.parameters(), lr=args.lr)
 	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
 	# action_fun = torch.nn.Sigmoid()
 	# loss = torch.nn.BCELoss()
 	# loss_fun = lambda prediction, target : loss(action_fun(prediction), target.float())
+
+elif args.experiment == 'one_zero' and 'Spike' not in args.network:
+	train_data, test_data = get_one_zeros(args, data_path=data_path, device=device)
+	# model = network[args.network](args, device)
+	model = eval(args.network)(args, device)
+	optimizer = optim.Adam(model.parameters(), lr=args.lr)
+	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
 
 elif args.experiment == 'one_zero_ab' and 'Spike' not in args.network:
 	train_data, test_data = get_one_zeros_ab(args, data_path=data_path, device=device)
@@ -146,14 +158,12 @@ elif args.experiment == 'one_zero_ab_analyse' and 'Spike' not in args.network:
 	optimizer = optim.Adam(model.parameters(), lr=args.lr)
 	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
 
-elif args.experiment == 'one_zero' and 'Spike' in args.network:
-	train_data, test_data = get_one_zeros(args, data_path=data_path, device=device)
+elif args.experiment == 'one_zero_vanillia' and 'Spike' in args.network:
+	train_data, test_data = get_one_zeros_vanillia(args, data_path=data_path, device=device)
 	model = eval(args.network)(args, device)
-	optimizer = optim.Adam(model.parameters(), lr=args.lr)
+	# optimizer = optim.Adam(model.parameters(), lr=args.lr)
+	# loss_fun = torch.nn.MSELoss()
 	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
-	# action_fun = torch.nn.Sigmoid()
-	# loss = torch.nn.BCELoss()
-	# loss_fun = lambda prediction, target : loss(action_fun(prediction), target.float())
 
 elif args.experiment == 'one_zero_vanillia' and 'Spike' not in args.network:
 	train_data, test_data = get_one_zeros_vanillia(args, data_path=data_path, device=device)
@@ -161,12 +171,8 @@ elif args.experiment == 'one_zero_vanillia' and 'Spike' not in args.network:
 	optimizer = optim.Adam(model.parameters(), lr=args.lr)
 	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
 
-elif args.experiment == 'one_zero_vanillia' and 'Spike' in args.network:
-	train_data, test_data = get_one_zeros_vanillia(args, data_path=data_path, device=device)
-	model = eval(args.network)(args, device)
-	# optimizer = optim.Adam(model.parameters(), lr=args.lr)
-	# loss_fun = torch.nn.MSELoss()
-	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
+
+model = model.to(device)
 
 # Log argument values.
 print('Optional argument values:')
@@ -188,9 +194,7 @@ def train():
 	start = timeit.default_timer()
 	for i in range(args.n_train):
 		total_correct = 0
-		best_accuracy = -1
 		correct = 0
-		temp = 0
 		with tqdm(total=len(train_data), ncols=100) as _tqdm:
 			_tqdm.set_description('epoch: {}/{}'.format(i+1, args.n_train))
 			for idx, (image, target) in enumerate(train_data):
@@ -205,26 +209,6 @@ def train():
 				correct = (predictions.argmax(1) == target.argmax(1)).float().sum()
 				correct = correct / args.batch_size
 				total_correct += (predictions.argmax(1) == target.argmax(1)).float().sum()
-				if i == 50 and False:
-					import matplotlib.pyplot as plt
-					import pickle
-					with open(f'{args.experiment}_hs_v_pre.pkl', 'wb') as a:
-						pickle.dump(model.neuron_hs.v_pre_list, a)
-					with open(f'{args.experiment}_hs_v_post.pkl', 'wb') as a:
-						pickle.dump(model.neuron_hs.v_post_list, a)
-					with open(f'{args.experiment}_hs_s.pkl', 'wb') as a:
-						pickle.dump(model.neuron_hs.s_monitor, a)
-					with open(f'{args.experiment}_h_v_pre.pkl', 'wb') as a:
-						pickle.dump(model.neuron_h.v_pre_list, a)
-					with open(f'{args.experiment}_h_v_post.pkl', 'wb') as a:
-						pickle.dump(model.neuron_h.v_post_list, a)
-					with open(f'{args.experiment}_h_s.pkl', 'wb') as a:
-						pickle.dump(model.neuron_h.s_monitor, a)
-					with open(f'{args.experiment}_target.pkl', 'wb') as a:
-						pickle.dump(target.cpu().numpy(), a)
-					with open(f'{args.experiment}_inputs.pkl', 'wb') as a:
-						pickle.dump(x_in.cpu().numpy(), a)	
-					sys.exit()
 				model.reset()
 				_tqdm.set_postfix(loss='{:.4f}, model={}'.format(loss, args.network))
 				_tqdm.update(1)
@@ -233,8 +217,8 @@ def train():
 		log('Training progress (%d/%d): Finish - Elapsed time: %.4f h' % (i+1, args.n_train, (timeit.default_timer() - start)/3600))
 		log('Current training total accuracy: %.4f' % (total_correct))
 		test(i, model)
-	print('save model')
-	torch.save(model.state_dict(), model_path + '/save.pt')
+		print('Save model ...')
+		torch.save(model.state_dict(), model_path + '/save.pt')
 
 def test(i, model):
 	model.eval()
@@ -258,8 +242,9 @@ def test(i, model):
 
 def analyse():
 	model.load_state_dict(torch.load(model_path + '/save.pt'))
-	if False:
-		# model.layer_ao.w.data *= 0. # 切断ACC
+	if args.mode == "analyse" and args.cut_acc_to_rsc:
+		model.layer_ao.w.data *= 0. # 切断ACC
+	if args.mode == "analyse" and args.cut_atn_to_rsc:
 		model.layer_ro.w.data *= 0. # 切断ATN
 	model.eval()
 	with torch.no_grad():
@@ -274,8 +259,8 @@ def analyse():
 				correct = (predictions.argmax(1) == target.argmax(1)).float().sum()
 				correct = correct / args.batch_size
 				total_correct += (predictions.argmax(1) == target.argmax(1)).float().sum()
-				if False:
-					with open('/home/jiashuncheng/code/MANN/plot/data/rsc_h_norm_witchout_b_2.pkl', 'wb') as a:
+				if args.mode == "analyse" and args.store_h_state:
+					with open('/home/jiashuncheng/code/MANN/plot/data/rsc_h_hidden100.pkl', 'wb') as a:
 						pickle.dump(model.neuron_o.h, a)
 						pickle.dump(target, a)
 					sys.exit()
