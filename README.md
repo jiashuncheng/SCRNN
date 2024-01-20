@@ -1,7 +1,7 @@
 # MANN (Memory-augmented neural network )
 The model of the network is
 
-![Model](https://github.com/jiashuncheng/MANN/blob/master/images/model.png)
+![Model](https://gitee.com/jiashuncheng/MANN/blob/master/images/model.png)
 
 ## References
 
