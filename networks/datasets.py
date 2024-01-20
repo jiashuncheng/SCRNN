@@ -486,7 +486,7 @@ def get_one_zero_vanillia(args):
 		targets = torch.tensor(0).float()
 
 	return spikes.cpu().numpy(), targets.cpu().numpy()
-
+ 
 def get_one_zeros_ab(args, data_path=None, device=None):
 	'''
 	Read input-vector (image) and target class (label, 0-9) and return it as tensor.

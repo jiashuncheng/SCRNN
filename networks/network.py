@@ -677,7 +677,7 @@ class SimpleMemoryNetwork_6(nn.Module):
 
 	def reset(self):
 		self.neuron_o.h = []
-
+##
 class SimpleMemoryNetwork_6_no_norm(nn.Module):
 	'''
 	Combines neuron groups and synapses into a spiking neural network.
