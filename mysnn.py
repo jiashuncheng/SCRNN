@@ -254,6 +254,7 @@ def analyse():
 			for idx, (image, target) in enumerate(test_data):
 				x_in, target = image.permute(1,0,2).to(device), target.to(device)
 				x_in = x_in + torch.normal(mean=args.mu, std=args.sigma, size=x_in.shape)
+				print(target[:2,:])
 				y_out = model('analyse', x_in, args.time)
 				predictions = torch.mean(y_out, dim=0)
 				correct = (predictions.argmax(1) == target.argmax(1)).float().sum()
