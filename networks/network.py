@@ -625,7 +625,7 @@ class SimpleMemoryNetwork_6(nn.Module):
 		self.neuron_o.h = []
 
 		self.layer_sr = Synapses(self.n_input, self.n_hidden, init='xavier')
-		self.layer_ma = Synapses(self.n_input, self.n_hidden, init='xavier')
+		self.layer_ma = Synapses(self.n_input+1, self.n_hidden, init='xavier')
 		self.layer_ro = Synapses(self.n_hidden, self.n_hidden, init='xavier')
 		self.layer_ao = Synapses(self.n_hidden, self.n_hidden, init='xavier')
 		self.layer_r = Synapses(self.n_hidden, self.n_hidden, init='xavier')
@@ -641,7 +641,7 @@ class SimpleMemoryNetwork_6(nn.Module):
 		aa = []
 
 		for timestep in range(int(time / self.dt)):
-			if x_in.shape[2] == 6:
+			if x_in.shape[2] == 5:
 				r = self.neuron_r(self.layer_sr(x_in[timestep, :][:,:self.n_input]) + self.layer_r(r))
 				a = self.neuron_a(self.layer_ma(x_in[timestep, :][:,self.n_input:]) + self.layer_a(a))
 			else:
@@ -665,7 +665,7 @@ class SimpleMemoryNetwork_6(nn.Module):
 			if mode == 'analyse' and self.cut_atn_to_rsc:
 				A *= 0.
 		if mode == 'analyse' and self.store_A_state:
-			with open('/home/jiashuncheng/code/MANN/plot/data/A_7.pkl', 'wb') as a:
+			with open('/home/jiashuncheng/code/MANN/plot/data/A_9.pkl', 'wb') as a:
 				pickle.dump(np.stack(aa), a)
 			sys.exit()
 
@@ -707,6 +707,7 @@ class SimpleMemoryNetwork_6_no_norm(nn.Module):
 		self.neuron_a = nn.ReLU() # ACC
 		self.neuron_r = nn.ReLU() # ATN
 		self.neuron_o = nn.ReLU() # RSC
+		# self.neuron_o = lambda x : torch.sin(x)
 		self.neuron_o.h = []
 
 		self.layer_sr = Synapses(self.n_input, self.n_hidden, init='xavier')
@@ -735,9 +736,6 @@ class SimpleMemoryNetwork_6_no_norm(nn.Module):
 
 			o = self.layer_ro(r).reshape(o.shape) + r.reshape(o.shape) @ A + self.layer_ao(a).reshape(o.shape)
 			o = self.neuron_o(o)
-			# mu = torch.mean(o, 0)
-			# sig = torch.sqrt(torch.mean(torch.pow((o - mu), 2), 0) + 1e-1)
-			# o = self.neuron_o(torch.div(self.g * (o - mu), sig) + self.b)
 			self.neuron_o.h.append(o.cpu().detach().numpy())
 			if self.layer_A and timestep >= self.analyse_pre and timestep <= (self.sample * self.repeat):
 				A = self.lambda_ * A + self.eta * o.transpose(1,2) @ r.reshape(o.shape)
@@ -791,6 +789,7 @@ class SimpleRNNNetwork(nn.Module):
 			mu = torch.mean(r, 0)
 			sig = torch.sqrt(torch.mean(torch.pow((r - mu), 2), 0) + 1e-1)
 			r = self.neuron_r(torch.div(self.g * (r - mu), sig) + self.b)
+			# print(timestep, r[0])
 
 		y = self.layer_y(r)
 		y_out = y.reshape([1, self.batch_size, self.n_output])
@@ -814,6 +813,7 @@ class SimpleRNNNetwork_no_norm(nn.Module):
 		self.b = nn.Parameter(torch.ones([1, self.n_hidden], dtype=torch.float32))
 
 		self.neuron_r = nn.ReLU()
+		# self.neuron_r = lambda x : torch.sin(x)
 
 		self.layer_sr = Synapses(self.n_input, self.n_hidden, init='xavier')
 		self.layer_r = Synapses(self.n_hidden, self.n_hidden, init='xavier')
@@ -825,9 +825,7 @@ class SimpleRNNNetwork_no_norm(nn.Module):
 		for timestep in range(int(time / self.dt)):
 			r = self.layer_sr(x_in[timestep, :]) + self.layer_r(r)
 			r = self.neuron_r(r)
-			# mu = torch.mean(r, 0)
-			# sig = torch.sqrt(torch.mean(torch.pow((r - mu), 2), 0) + 1e-1)
-			# r = self.neuron_r(torch.div(self.g * (r - mu), sig) + self.b)
+			# print(timestep, r[0])
 
 		y = self.layer_y(r)
 		y_out = y.reshape([1, self.batch_size, self.n_output])

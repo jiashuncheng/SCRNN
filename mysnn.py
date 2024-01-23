@@ -87,9 +87,9 @@ if args.gpu is not None:
 else:
 	device = torch.device("cpu")
 
-logs_path = os.path.join(p.parent, 'results',args.model_name, 'logs')
-params_path = os.path.join(p.parent, 'results',args.model_name, 'params')
-model_path = os.path.join(p.parent, 'results',args.model_name, 'model')
+logs_path = os.path.join(p.parent, 'results', 'from_164', args.model_name, 'logs')
+params_path = os.path.join(p.parent, 'results', 'from_164', args.model_name, 'params')
+model_path = os.path.join(p.parent, 'results', 'from_164', args.model_name, 'model')
 data_path = os.path.join(p.parent, 'data', args.experiment)
 
 # Build filename from command-line arguments.
@@ -145,7 +145,7 @@ elif args.experiment == 'one_zero' and 'Spike' not in args.network:
 elif args.experiment == 'one_zero_ab' and 'Spike' not in args.network:
 	train_data, test_data = get_one_zeros_ab(args, data_path=data_path, device=device)
 	if 'Memory' in args.network:
-		args.n_input = args.n_input // 2
+		args.n_input = 2
 	model = eval(args.network)(args, device)
 	optimizer = optim.Adam(model.parameters(), lr=args.lr)
 	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
@@ -153,7 +153,7 @@ elif args.experiment == 'one_zero_ab' and 'Spike' not in args.network:
 elif args.experiment == 'one_zero_ab_analyse' and 'Spike' not in args.network:
 	train_data, test_data = get_one_zeros_ab_analyse(args, data_path=data_path, device=device)
 	if 'Memory' in args.network:
-		args.n_input = args.n_input // 2
+		args.n_input = 2
 	model = eval(args.network)(args, device)
 	optimizer = optim.Adam(model.parameters(), lr=args.lr)
 	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
@@ -254,14 +254,14 @@ def analyse():
 			for idx, (image, target) in enumerate(test_data):
 				x_in, target = image.permute(1,0,2).to(device), target.to(device)
 				x_in = x_in + torch.normal(mean=args.mu, std=args.sigma, size=x_in.shape)
-				print(target[:2,:])
+				print(target[:10])
 				y_out = model('analyse', x_in, args.time)
 				predictions = torch.mean(y_out, dim=0)
 				correct = (predictions.argmax(1) == target.argmax(1)).float().sum()
 				correct = correct / args.batch_size
 				total_correct += (predictions.argmax(1) == target.argmax(1)).float().sum()
 				if args.mode == "analyse" and args.store_h_state:
-					with open('/home/jiashuncheng/code/MANN/plot/data/rsc_h_hidden100.pkl', 'wb') as a:
+					with open('/home/jiashuncheng/code/MANN/plot/data/rsc_h_task1.pkl', 'wb') as a:
 						pickle.dump(model.neuron_o.h, a)
 						pickle.dump(target, a)
 					sys.exit()

@@ -496,7 +496,7 @@ def get_one_zeros_ab(args, data_path=None, device=None):
 	decision = int(args.decision / args.dt)
 	repeat = int(args.repeat / args.dt)
 	args.time = sample * repeat + delay + decision
-	args.n_input = 6
+	args.n_input = 5
 	args.n_output = 2
 	train_images, train_labels = load_one_zeros_ab(train=True, data_path=data_path, args=args)
 	test_images, test_labels = load_one_zeros_ab(train=False, data_path=data_path, args=args)
@@ -531,8 +531,8 @@ def load_one_zeros_ab(train=True, data_path=None, args=None):
 		num_train = 6000
 		num_test = 1000
 
-		x_train = np.zeros([num_train, args.time, 6], dtype=np.float32)
-		x_test = np.zeros([num_test, args.time, 6], dtype=np.float32)
+		x_train = np.zeros([num_train, args.time, 5], dtype=np.float32)
+		x_test = np.zeros([num_test, args.time, 5], dtype=np.float32)
 
 		y_train = np.zeros([num_train, 1], dtype=np.float32)
 		y_test = np.zeros([num_test, 1], dtype=np.float32)
@@ -564,33 +564,33 @@ def get_one_zero_ab(args):
 	decision = int(args.decision / args.dt)
 	repeat = int(args.repeat / args.dt)
 	args.time = sample * repeat + delay + decision
-	spikes = torch.zeros((args.time, 6))
-	samples = torch.zeros((sample, 6))
+	spikes = torch.zeros((args.time, 5))
+	samples = torch.zeros((sample, 5))
 	targets = torch.zeros((1))
 	num_0 = np.random.choice([int(args.prop*sample), sample-int(args.prop*sample)])
 	num_1 = int(sample - num_0)
 	mice_0_a = np.random.choice([int(args.prop_0_a*num_0), int(args.prop_1_a*num_1)])
 	mice_1_a = list(set([int(args.prop_0_a*num_0), int(args.prop_1_a*num_1)]).difference(set([mice_0_a])))[0]
 
-	samples[range(sample), :] = torch.tensor([[1., 0., 0., 0., 1., 0.]]).repeat(sample, 1) # sample_0_b
+	samples[range(sample), :] = torch.tensor([[1., 0., 0., 1., 0.]]).repeat(sample, 1) # sample_0_b
 	indices = np.random.choice(range(sample), size=num_1, replace=False)
 	indices_1_a = np.random.choice(indices, size=mice_1_a, replace=False)
-	samples[indices, :] = torch.tensor([[0., 1., 0., 0., 1., 0.]]).repeat(num_1, 1) # sample_1_b
-	samples[indices_1_a, :] = torch.tensor([[0., 1., 0., 1., 0., 0.]]).repeat(mice_1_a, 1) # sample_1_a
+	samples[indices, :] = torch.tensor([[0., 1., 0., 1., 0.]]).repeat(num_1, 1) # sample_1_b
+	samples[indices_1_a, :] = torch.tensor([[0., 1., 1., 0., 0.]]).repeat(mice_1_a, 1) # sample_1_a
 	indices_0 = list(set(range(sample)).difference(set(indices)))
 	indices_0_a = np.random.choice(indices_0, size=mice_0_a, replace=False)
-	samples[indices_0_a, :] = torch.tensor([[1., 0., 0., 1., 0., 0.]]).repeat(mice_0_a, 1) # sample_0_a
+	samples[indices_0_a, :] = torch.tensor([[1., 0., 1., 0., 0.]]).repeat(mice_0_a, 1) # sample_0_a
 	samples = samples.cpu().numpy()
 	samples = np.repeat(samples, repeat, axis=0)
 	spikes[:sample*repeat, :] = torch.tensor(samples)
 
-	spikes[sample*repeat:sample*repeat+delay, :] = torch.tensor([[0., 0., 1., 0., 0., 1.]]).repeat(delay, 1) # delay
+	spikes[sample*repeat:sample*repeat+delay, :] = torch.tensor([[0., 0., 0., 0., 0.]]).repeat(delay, 1) # delay
 	dec = np.random.rand()
 	if dec > 0.5 :
-		spikes[sample*repeat+delay:, :] = torch.tensor([[0., 1., 0., 0., 0., 1.]]).repeat(decision, 1)# decision
+		spikes[sample*repeat+delay:, :] = torch.tensor([[0., 1., 0., 0., 1.]]).repeat(decision, 1)# decision
 		targets = torch.tensor(mice_1_a > mice_0_a).float()
 	else:
-		spikes[sample*repeat+delay:, :] = torch.tensor([[1., 0., 0., 0., 0., 1.]]).repeat(decision, 1)# decision
+		spikes[sample*repeat+delay:, :] = torch.tensor([[1., 0., 0., 0., 1.]]).repeat(decision, 1)# decision
 		targets = torch.tensor(mice_1_a < mice_0_a).float()
 
 	return spikes.cpu().numpy(), targets.cpu().numpy()
@@ -605,7 +605,7 @@ def get_one_zeros_ab_analyse(args, data_path=None, device=None):
 	decision = int(args.decision / args.dt)
 	repeat = int(args.repeat / args.dt)
 	args.time = analyse_pre + sample * repeat + delay + decision
-	args.n_input = 6
+	args.n_input = 5
 	args.n_output = 2
 	test_images, test_labels = load_one_zeros_ab_analyse(train=False, data_path=data_path, args=args)
 	test_dataset = One_zeros(test_images, test_labels)
@@ -624,7 +624,7 @@ def load_one_zeros_ab_analyse(train=True, data_path=None, args=None):
 	'''
 	fname = 'train' if train else 'test'
 	num_test = 1000
-	x_test = np.zeros([num_test, args.time, 6], dtype=np.float32)
+	x_test = np.zeros([num_test, args.time, 5], dtype=np.float32)
 	y_test = np.zeros([num_test, 1], dtype=np.float32)
 
 	print('Progress test data.')
@@ -643,37 +643,37 @@ def get_one_zero_ab_analyse(args):
 	decision = int(args.decision / args.dt)
 	repeat = int(args.repeat / args.dt)
 	time = sample * repeat + delay + decision
-	spikes = torch.zeros((time, 6))
-	samples = torch.zeros((sample, 6))
+	spikes = torch.zeros((time, 5))
+	samples = torch.zeros((sample, 5))
 	targets = torch.zeros((1))
 	num_0 = np.random.choice([int(args.prop*sample), sample-int(args.prop*sample)])
 	num_1 = int(sample - num_0)
 	mice_0_a = np.random.choice([int(args.prop_0_a*num_0), int(args.prop_1_a*num_1)])
 	mice_1_a = list(set([int(args.prop_0_a*num_0), int(args.prop_1_a*num_1)]).difference(set([mice_0_a])))[0]
 
-	samples[range(sample), :] = torch.tensor([[1., 0., 0., 0., 1., 0.]]).repeat(sample, 1) # sample_0_b
+	samples[range(sample), :] = torch.tensor([[1., 0., 0., 1., 0.]]).repeat(sample, 1) # sample_0_b
 	indices = np.random.choice(range(sample), size=num_1, replace=False)
 	indices_1_a = np.random.choice(indices, size=mice_1_a, replace=False)
-	samples[indices, :] = torch.tensor([[0., 1., 0., 0., 1., 0.]]).repeat(num_1, 1) # sample_1_b
-	samples[indices_1_a, :] = torch.tensor([[0., 1., 0., 1., 0., 0.]]).repeat(mice_1_a, 1) # sample_1_a
+	samples[indices, :] = torch.tensor([[0., 1., 0., 1., 0.]]).repeat(num_1, 1) # sample_1_b
+	samples[indices_1_a, :] = torch.tensor([[0., 1., 1., 0., 0.]]).repeat(mice_1_a, 1) # sample_1_a
 	indices_0 = list(set(range(sample)).difference(set(indices)))
 	indices_0_a = np.random.choice(indices_0, size=mice_0_a, replace=False)
-	samples[indices_0_a, :] = torch.tensor([[1., 0., 0., 1., 0., 0.]]).repeat(mice_0_a, 1) # sample_0_a
+	samples[indices_0_a, :] = torch.tensor([[1., 0., 1., 0., 0.]]).repeat(mice_0_a, 1) # sample_0_a
 	samples = samples.cpu().numpy()
 	samples = np.repeat(samples, repeat, axis=0)
 	spikes[:sample*repeat, :] = torch.tensor(samples)
 
-	spikes[sample*repeat:sample*repeat+delay, :] = torch.tensor([[0., 0., 1., 0., 0., 1.]]).repeat(delay, 1) # delay
+	spikes[sample*repeat:sample*repeat+delay, :] = torch.tensor([[0., 0., 0., 0., 0.]]).repeat(delay, 1) # delay
 	dec = np.random.rand()
 	if dec > 0.5 :
-		spikes[sample*repeat+delay:, :] = torch.tensor([[0., 1., 0., 0., 0., 1.]]).repeat(decision, 1)# decision
+		spikes[sample*repeat+delay:, :] = torch.tensor([[0., 1., 0., 0., 1.]]).repeat(decision, 1)# decision
 		targets = torch.tensor(mice_1_a > mice_0_a).float()
 	else:
-		spikes[sample*repeat+delay:, :] = torch.tensor([[1., 0., 0., 0., 0., 1.]]).repeat(decision, 1)# decision
+		spikes[sample*repeat+delay:, :] = torch.tensor([[1., 0., 0., 0., 1.]]).repeat(decision, 1)# decision
 		targets = torch.tensor(mice_1_a < mice_0_a).float()
-	analyses = torch.zeros((analyse_pre, 6))
+	analyses = torch.zeros((analyse_pre, 5))
 	analyses[:,0] = 1.
-	analyses[:,5] = 1.
+	analyses[:,4] = 1.
 	spikes = torch.cat((analyses, spikes), 0)
 
 	return spikes.cpu().numpy(), targets.cpu().numpy()
