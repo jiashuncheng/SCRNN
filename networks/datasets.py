@@ -570,8 +570,10 @@ def get_one_zero_ab(args):
 	num_0 = np.random.choice([int(args.prop*sample), sample-int(args.prop*sample)])
 	num_1 = int(sample - num_0)
 	mice_0_a = np.random.choice([int(args.prop_0_a*num_0), int(args.prop_1_a*num_1)])
-	mice_1_a = list(set([int(args.prop_0_a*num_0), int(args.prop_1_a*num_1)]).difference(set([mice_0_a])))[0]
-
+	try:
+		mice_1_a = list(set([int(args.prop_0_a*num_0), int(args.prop_1_a*num_1)]).difference(set([mice_0_a])))[0]
+	except:
+		mice_1_a = mice_0_a
 	samples[range(sample), :] = torch.tensor([[1., 0., 0., 1., 0.]]).repeat(sample, 1) # sample_0_b
 	indices = np.random.choice(range(sample), size=num_1, replace=False)
 	indices_1_a = np.random.choice(indices, size=mice_1_a, replace=False)
@@ -612,8 +614,7 @@ def get_one_zeros_ab_analyse(args, data_path=None, device=None):
 	test_dataloader = torch.utils.data.DataLoader(test_dataset, 
 											   	batch_size=args.batch_size, 
 											   	shuffle=False, 
-											   	num_workers=0,
-              									generator=torch.Generator(device=device))
+											   	num_workers=0)
 
 	return None, test_dataloader
 

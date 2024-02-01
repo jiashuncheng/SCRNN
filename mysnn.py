@@ -66,6 +66,8 @@ parser.add_argument('--store_h_state', action='store_true')
 parser.add_argument('--store_A_state', action='store_true')
 parser.add_argument('--cut_atn_to_rsc', action='store_true')
 parser.add_argument('--cut_acc_to_rsc', action='store_true')
+parser.add_argument('--eta', type=float, default=0.5)
+parser.add_argument('--lambda_', type=float, default=0.9)
 
 # Place parsed arguments in local scope.
 args = parser.parse_args()
@@ -87,13 +89,13 @@ if args.gpu is not None:
 else:
 	device = torch.device("cpu")
 
-logs_path = os.path.join(p.parent, 'results', 'from_164', args.model_name, 'logs')
-params_path = os.path.join(p.parent, 'results', 'from_164', args.model_name, 'params')
-model_path = os.path.join(p.parent, 'results', 'from_164', args.model_name, 'model')
+logs_path = os.path.join(p.parent, 'results', args.model_name, 'logs')
+params_path = os.path.join(p.parent, 'results', args.model_name, 'params')
+model_path = os.path.join(p.parent, 'results', args.model_name, 'model')
 data_path = os.path.join(p.parent, 'data', args.experiment)
 
 # Build filename from command-line arguments.
-fname = '_'.join([str(args.n_hidden), str(args.n_train), str(args.seed), str(args.experiment), str(args.cut_acc_to_rsc), str(args.cut_atn_to_rsc), str(args.layer_A)])
+fname = '_'.join([str(args.n_hidden), str(args.n_train), str(args.seed), str(args.experiment), str(args.cut_acc_to_rsc), str(args.cut_atn_to_rsc), str(args.layer_A), str(args.eta), str(args.lambda_), str(args.delay)])
 for path in [logs_path, data_path, params_path, model_path]:
 	if not os.path.isdir(path):
 		os.makedirs(path)
@@ -253,15 +255,14 @@ def analyse():
 		with tqdm(total=len(test_data), ncols=100) as _tqdm:
 			for idx, (image, target) in enumerate(test_data):
 				x_in, target = image.permute(1,0,2).to(device), target.to(device)
-				x_in = x_in + torch.normal(mean=args.mu, std=args.sigma, size=x_in.shape)
-				print(target[:10])
+				x_in = x_in + torch.normal(mean=args.mu, std=args.sigma, size=x_in.shape).to(device)
 				y_out = model('analyse', x_in, args.time)
 				predictions = torch.mean(y_out, dim=0)
 				correct = (predictions.argmax(1) == target.argmax(1)).float().sum()
 				correct = correct / args.batch_size
 				total_correct += (predictions.argmax(1) == target.argmax(1)).float().sum()
 				if args.mode == "analyse" and args.store_h_state:
-					with open('/home/jiashuncheng/code/MANN/plot/data/rsc_h_task1.pkl', 'wb') as a:
+					with open('/home/jiashuncheng/code/MANN/plot/data/fixed_eta_h_todo9.pkl', 'wb') as a:
 						pickle.dump(model.neuron_o.h, a)
 						pickle.dump(target, a)
 					sys.exit()

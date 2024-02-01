@@ -614,8 +614,273 @@ class SimpleMemoryNetwork_6(nn.Module):
 		self.store_A_state = args.store_A_state
 		self.cut_atn_to_rsc = args.cut_atn_to_rsc
 
-		self.lambda_ = nn.Parameter(torch.tensor([0.9], dtype=torch.float32))
-		self.eta = nn.Parameter(torch.tensor([0.5], dtype=torch.float32))
+		self.lambda_ = torch.tensor([args.lambda_], dtype=torch.float32).to(device)
+		self.eta = torch.tensor([args.eta], dtype=torch.float32).to(device)
+		self.g = nn.Parameter(torch.ones([1, self.n_hidden], dtype=torch.float32))
+		self.b = nn.Parameter(torch.zeros([1, self.n_hidden], dtype=torch.float32))
+
+		self.neuron_a = nn.ReLU() # ACC
+		self.neuron_r = nn.ReLU() # ATN
+		self.neuron_o = nn.ReLU() # RSC
+		self.neuron_o.h = []
+
+		self.layer_sr = Synapses(self.n_input, self.n_hidden, init='xavier')
+		self.layer_ma = Synapses(self.n_input+1, self.n_hidden, init='xavier')
+		self.layer_ro = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_ao = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_ar = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_ra = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_r = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_a = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_y = Synapses(self.n_hidden, self.n_output, init='xavier')
+
+	def forward(self, mode, x_in, time):
+		r = torch.zeros((self.batch_size, self.n_hidden)).to(self.device)
+		a = torch.zeros((self.batch_size, self.n_hidden)).to(self.device)
+		o = torch.zeros((self.batch_size, 1, self.n_hidden)).to(self.device)
+		A = torch.zeros((self.batch_size, self.n_hidden, self.n_hidden)).to(self.device)
+		y_out = torch.zeros((self.decision, self.batch_size, self.n_output)).to(self.device)
+		aa = []
+
+		for timestep in range(int(time / self.dt)):
+			if x_in.shape[2] == 5:
+				a_t = a
+				a = self.neuron_a(self.layer_ma(x_in[timestep, :][:,self.n_input:]) + self.layer_a(a) + self.layer_ra(r))
+				r = self.neuron_r(self.layer_sr(x_in[timestep, :][:,:self.n_input]) + self.layer_ar(a_t))
+			else:
+				a_t = a
+				a = self.neuron_a(self.layer_ma(x_in[timestep, :]) + self.layer_a(a) + self.layer_ra(r))
+				r = self.neuron_r(self.layer_sr(x_in[timestep, :]) + self.layer_ar(a_t))				
+
+			o = self.layer_ro(r).reshape(o.shape) + r.reshape(o.shape) @ A + self.layer_ao(a).reshape(o.shape)
+			mu = torch.mean(o, 0)
+			o = self.neuron_o(self.g * (o - mu) + self.b)
+			self.neuron_o.h.append(o.cpu().detach().numpy())
+			A = self.lambda_ * A + self.eta * o.transpose(1,2) @ r.reshape(o.shape)
+			# print(A.max().item(), A.min().item())
+
+			if self.decision > 1 and timestep >= int(time / self.dt) - self.decision:
+				y = self.layer_y(o.reshape(self.batch_size, self.n_hidden))
+				y_out[timestep + self.decision - int(time / self.dt), :,:] = y.reshape([self.batch_size, self.n_output])
+
+			if mode == 'analyse' and self.store_A_state:
+				aa.append(A.cpu().detach())
+			if mode == 'analyse' and self.cut_atn_to_rsc:
+				A *= 0.
+		if mode == 'analyse' and self.store_A_state:
+			with open('/home/jiashuncheng/code/MANN/plot/data/A_9.pkl', 'wb') as a:
+				pickle.dump(np.stack(aa), a)
+			sys.exit()
+
+		if self.decision == 1:
+			y = self.layer_y(o.reshape(self.batch_size, self.n_hidden))
+			y_out = y.reshape([1, self.batch_size, self.n_output])
+			
+		return y_out
+
+	def reset(self):
+		self.neuron_o.h = []
+
+class SimpleMemoryNetwork_8(nn.Module):
+	'''
+	Combines neuron groups and synapses into a spiking neural network.
+	'''
+	def __init__(self, args, device):
+		super(SimpleMemoryNetwork_8, self).__init__()
+		self.dt = args.dt
+		self.device = device
+		self.batch_size = args.batch_size
+		self.n_input = args.n_input
+		self.n_hidden = args.n_hidden
+		self.n_output = args.n_output
+		self.layer_A = args.layer_A
+		self.analyse_pre = args.analyse_pre // self.dt
+		self.sample = args.sample // self.dt
+		self.repeat = args.repeat // self.dt
+		self.decision = args.decision // self.dt
+		self.experiment = args.experiment
+		self.store_A_state = args.store_A_state
+		self.cut_atn_to_rsc = args.cut_atn_to_rsc
+
+		self.lambda_ = torch.tensor([args.lambda_], dtype=torch.float32).to(device)
+		self.eta = torch.tensor([args.eta], dtype=torch.float32).to(device)
+		self.g = nn.Parameter(torch.ones([1, self.n_hidden], dtype=torch.float32))
+		self.b = nn.Parameter(torch.zeros([1, self.n_hidden], dtype=torch.float32))
+
+		self.neuron_a = nn.ReLU() # ACC
+		self.neuron_r = nn.ReLU() # ATN
+		self.neuron_o = nn.ReLU() # RSC
+		self.neuron_o.h = []
+
+		self.layer_sr = Synapses(self.n_input, self.n_hidden, init='xavier')
+		self.layer_ma = Synapses(self.n_input+1, self.n_hidden, init='xavier')
+		self.layer_ro = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_ao = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_ar = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_ra = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_r = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_a = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_y = Synapses(self.n_hidden, self.n_output, init='xavier')
+
+	def forward(self, mode, x_in, time):
+		r = torch.zeros((self.batch_size, self.n_hidden)).to(self.device)
+		a = torch.zeros((self.batch_size, self.n_hidden)).to(self.device)
+		o = torch.zeros((self.batch_size, 1, self.n_hidden)).to(self.device)
+		A = torch.zeros((self.batch_size, self.n_hidden, self.n_hidden)).to(self.device)
+		y_out = torch.zeros((self.decision, self.batch_size, self.n_output)).to(self.device)
+		aa = []
+
+		for timestep in range(int(time / self.dt)):
+			if x_in.shape[2] == 5:
+				a_t = a
+				a = self.neuron_a(self.layer_ma(x_in[timestep, :][:,self.n_input:]) + self.layer_a(a) + self.layer_ra(r))
+				r = self.neuron_r(self.layer_sr(x_in[timestep, :][:,:self.n_input]) + self.layer_ar(a_t))
+			else:
+				a_t = a
+				a = self.neuron_a(self.layer_ma(x_in[timestep, :]) + self.layer_a(a) + self.layer_ra(r))
+				r = self.neuron_r(self.layer_sr(x_in[timestep, :]) + self.layer_ar(a_t))				
+
+			o = self.layer_ro(r).reshape(o.shape) + r.reshape(o.shape) @ A + self.layer_ao(a).reshape(o.shape)
+			mu = torch.mean(o, 0)
+			o = self.neuron_o(self.g * (o - mu) + self.b)
+			self.neuron_o.h.append(o.cpu().detach().numpy())
+			A = self.lambda_ * A + self.eta * o.transpose(1,2) @ r.reshape(o.shape)
+			A = A + 1e-6
+			A = A / torch.sum(A, dim=1, keepdim=True)
+
+			if self.decision > 1 and timestep >= int(time / self.dt) - self.decision:
+				y = self.layer_y(o.reshape(self.batch_size, self.n_hidden))
+				y_out[timestep + self.decision - int(time / self.dt), :,:] = y.reshape([self.batch_size, self.n_output])
+
+			if mode == 'analyse' and self.store_A_state:
+				aa.append(A.cpu().detach())
+			if mode == 'analyse' and self.cut_atn_to_rsc:
+				A *= 0.
+		if mode == 'analyse' and self.store_A_state:
+			with open('/home/jiashuncheng/code/MANN/plot/data/A_9.pkl', 'wb') as a:
+				pickle.dump(np.stack(aa), a)
+			sys.exit()
+
+		if self.decision == 1:
+			y = self.layer_y(o.reshape(self.batch_size, self.n_hidden))
+			y_out = y.reshape([1, self.batch_size, self.n_output])
+			
+		return y_out
+
+	def reset(self):
+		self.neuron_o.h = []
+
+class SimpleMemoryNetwork_10(nn.Module):
+	'''
+	Combines neuron groups and synapses into a spiking neural network.
+	'''
+	def __init__(self, args, device):
+		super(SimpleMemoryNetwork_10, self).__init__()
+		self.dt = args.dt
+		self.device = device
+		self.batch_size = args.batch_size
+		self.n_input = args.n_input
+		self.n_hidden = args.n_hidden
+		self.n_output = args.n_output
+		self.layer_A = args.layer_A
+		self.analyse_pre = args.analyse_pre // self.dt
+		self.sample = args.sample // self.dt
+		self.repeat = args.repeat // self.dt
+		self.decision = args.decision // self.dt
+		self.experiment = args.experiment
+		self.store_A_state = args.store_A_state
+		self.cut_atn_to_rsc = args.cut_atn_to_rsc
+
+		self.lambda_ = torch.tensor([args.lambda_], dtype=torch.float32).to(device)
+		self.eta = torch.tensor([args.eta], dtype=torch.float32).to(device)
+		self.g = nn.Parameter(torch.ones([1, self.n_hidden], dtype=torch.float32))
+		self.b = nn.Parameter(torch.zeros([1, self.n_hidden], dtype=torch.float32))
+
+		self.neuron_a = nn.ReLU() # ACC
+		self.neuron_r = nn.ReLU() # ATN
+		self.neuron_o = nn.ReLU() # RSC
+		self.neuron_o.h = []
+
+		self.layer_sr = Synapses(self.n_input, self.n_hidden, init='xavier')
+		self.layer_ma = Synapses(self.n_input+1, self.n_hidden, init='xavier')
+		self.layer_ro = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_ao = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_ar = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_ra = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_r = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_a = Synapses(self.n_hidden, self.n_hidden, init='xavier')
+		self.layer_y = Synapses(self.n_hidden, self.n_output, init='xavier')
+
+	def forward(self, mode, x_in, time):
+		r = torch.zeros((self.batch_size, self.n_hidden)).to(self.device)
+		a = torch.zeros((self.batch_size, self.n_hidden)).to(self.device)
+		o = torch.zeros((self.batch_size, 1, self.n_hidden)).to(self.device)
+		A = 1 * torch.ones((self.batch_size, self.n_hidden, self.n_hidden)).to(self.device)
+		y_out = torch.zeros((self.decision, self.batch_size, self.n_output)).to(self.device)
+		aa = []
+
+		for timestep in range(int(time / self.dt)):
+			if x_in.shape[2] == 5:
+				a_t = a
+				a = self.neuron_a(self.layer_ma(x_in[timestep, :][:,self.n_input:]) + self.layer_a(a) + self.layer_ra(r))
+				r = self.neuron_r(self.layer_sr(x_in[timestep, :][:,:self.n_input]) + self.layer_ar(a_t))
+			else:
+				a_t = a
+				a = self.neuron_a(self.layer_ma(x_in[timestep, :]) + self.layer_a(a) + self.layer_ra(r))
+				r = self.neuron_r(self.layer_sr(x_in[timestep, :]) + self.layer_ar(a_t))				
+
+			o = r.reshape(o.shape) @ A + self.layer_ao(a).reshape(o.shape)
+			mu = torch.mean(o, 0)
+			o = self.neuron_o(self.g * (o - mu) + self.b)
+			self.neuron_o.h.append(o.cpu().detach().numpy())
+			A = self.lambda_ * A + self.eta * o.transpose(1,2) @ r.reshape(o.shape)
+			A = 10 * A / torch.sum(A, dim=1, keepdim=True)
+
+			if self.decision > 1 and timestep >= int(time / self.dt) - self.decision:
+				y = self.layer_y(o.reshape(self.batch_size, self.n_hidden))
+				y_out[timestep + self.decision - int(time / self.dt), :,:] = y.reshape([self.batch_size, self.n_output])
+
+			if mode == 'analyse' and self.store_A_state:
+				aa.append(A.cpu().detach())
+			if mode == 'analyse' and self.cut_atn_to_rsc:
+				A *= 0.
+		if mode == 'analyse' and self.store_A_state:
+			with open('/home/jiashuncheng/code/MANN/plot/data/A_9.pkl', 'wb') as a:
+				pickle.dump(np.stack(aa), a)
+			sys.exit()
+
+		if self.decision == 1:
+			y = self.layer_y(o.reshape(self.batch_size, self.n_hidden))
+			y_out = y.reshape([1, self.batch_size, self.n_output])
+			
+		return y_out
+
+	def reset(self):
+		self.neuron_o.h = []
+
+class SimpleMemoryNetwork_7(nn.Module):
+	'''
+	Combines neuron groups and synapses into a spiking neural network.
+	'''
+	def __init__(self, args, device):
+		super(SimpleMemoryNetwork_6, self).__init__()
+		self.dt = args.dt
+		self.device = device
+		self.batch_size = args.batch_size
+		self.n_input = args.n_input
+		self.n_hidden = args.n_hidden
+		self.n_output = args.n_output
+		self.layer_A = args.layer_A
+		self.analyse_pre = args.analyse_pre // self.dt
+		self.sample = args.sample // self.dt
+		self.repeat = args.repeat // self.dt
+		self.decision = args.decision // self.dt
+		self.experiment = args.experiment
+		self.store_A_state = args.store_A_state
+		self.cut_atn_to_rsc = args.cut_atn_to_rsc
+
+		self.lambda_ = torch.tensor([args.lambda_], dtype=torch.float32).to(device)
+		self.eta = torch.tensor([args.eta], dtype=torch.float32).to(device)
 		self.g = nn.Parameter(torch.ones([1, self.n_hidden], dtype=torch.float32))
 		self.b = nn.Parameter(torch.ones([1, self.n_hidden], dtype=torch.float32))
 
@@ -677,7 +942,7 @@ class SimpleMemoryNetwork_6(nn.Module):
 
 	def reset(self):
 		self.neuron_o.h = []
-##
+
 class SimpleMemoryNetwork_6_no_norm(nn.Module):
 	'''
 	Combines neuron groups and synapses into a spiking neural network.
