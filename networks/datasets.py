@@ -624,7 +624,7 @@ def load_one_zeros_ab_analyse(train=True, data_path=None, args=None):
 	a list of tuples.
 	'''
 	fname = 'train' if train else 'test'
-	num_test = 1000
+	num_test = args.n_trials
 	x_test = np.zeros([num_test, args.time, 5], dtype=np.float32)
 	y_test = np.zeros([num_test, 1], dtype=np.float32)
 
@@ -650,7 +650,10 @@ def get_one_zero_ab_analyse(args):
 	num_0 = np.random.choice([int(args.prop*sample), sample-int(args.prop*sample)])
 	num_1 = int(sample - num_0)
 	mice_0_a = np.random.choice([int(args.prop_0_a*num_0), int(args.prop_1_a*num_1)])
-	mice_1_a = list(set([int(args.prop_0_a*num_0), int(args.prop_1_a*num_1)]).difference(set([mice_0_a])))[0]
+	try:
+		mice_1_a = list(set([int(args.prop_0_a*num_0), int(args.prop_1_a*num_1)]).difference(set([mice_0_a])))[0]
+	except:
+		mice_1_a = 0
 
 	samples[range(sample), :] = torch.tensor([[1., 0., 0., 1., 0.]]).repeat(sample, 1) # sample_0_b
 	indices = np.random.choice(range(sample), size=num_1, replace=False)
@@ -673,9 +676,10 @@ def get_one_zero_ab_analyse(args):
 		spikes[sample*repeat+delay:, :] = torch.tensor([[1., 0., 0., 0., 1.]]).repeat(decision, 1)# decision
 		targets = torch.tensor(mice_1_a < mice_0_a).float()
 	analyses = torch.zeros((analyse_pre, 5))
-	analyses[:,0] = 1.
+	# analyses[:,0] = 1. # the pre is 00,001 (20240829)
 	analyses[:,4] = 1.
 	spikes = torch.cat((analyses, spikes), 0)
+	#spikes[3-decision:, :] = 0. # only the fist step of decision is not zero (20240829)
 
 	return spikes.cpu().numpy(), targets.cpu().numpy()
 

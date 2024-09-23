@@ -26,7 +26,7 @@ def log(info):
 parser = argparse.ArgumentParser(description='ETH (with LIF neurons) \
 					SNN toy model simulation implemented with PyTorch.')
 
-parser.add_argument('--experiment', type=str, default='abc')
+parser.add_argument('--experiment', type=str, default='abc', help='Dataset enviroment')
 parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--mode', type=str, default='train')
 parser.add_argument('--n_hidden', type=int, default=400)
@@ -45,9 +45,10 @@ parser.add_argument('--dt', type=float, default=1)
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--batch_size', type=int, default=100)
 parser.add_argument('--gpu', type=str, default=None)
-parser.add_argument('--model_name', type=str, default='eth')
-parser.add_argument('--network', type=str, default='MemoryNetwork')
+parser.add_argument('--model_name', type=str, default='eth', help='Name of saved training model')
+parser.add_argument('--network', type=str, default='MemoryNetwork', help='Network architecture')
 parser.add_argument('--layer_A', action='store_true')
+parser.add_argument('--n_trials', type=int, help='Number of dataset samples.', default=1000)
 
 # one_zero task
 parser.add_argument('--analyse_pre', type=int, default=0)
@@ -59,15 +60,24 @@ parser.add_argument('--prop', type=float, default=0.5)
 parser.add_argument('--prop_0_a', type=float, default=0.8)
 parser.add_argument('--prop_1_a', type=float, default=0.4)
 parser.add_argument('--mu', type=float, default=0.)
-parser.add_argument('--sigma', type=float, default=0.05)
+parser.add_argument('--sigma', type=float, default=0.6)
 
 # analyse
 parser.add_argument('--store_h_state', action='store_true')
+parser.add_argument('--name_of_saved_file', type=str, help='filename of store_h_state')
 parser.add_argument('--store_A_state', action='store_true')
 parser.add_argument('--cut_atn_to_rsc', action='store_true')
 parser.add_argument('--cut_acc_to_rsc', action='store_true')
-parser.add_argument('--eta', type=float, default=0.5)
 parser.add_argument('--lambda_', type=float, default=0.9)
+parser.add_argument('--eta0', type=float, default=0)
+parser.add_argument('--u', type=float, default=0.5)
+parser.add_argument('--kd', type=float, default=0.5)
+parser.add_argument('--r0', type=float, default=0.5)
+parser.add_argument('--alpha', type=float, default=0.9)
+parser.add_argument('--eta', type=float, default=-1.)
+parser.add_argument('--wg', type=float, default=0.1)
+parser.add_argument('--rc', type=float, default=-1.)
+
 
 # Place parsed arguments in local scope.
 args = parser.parse_args()
@@ -95,7 +105,7 @@ model_path = os.path.join(p.parent, 'results', args.model_name, 'model')
 data_path = os.path.join(p.parent, 'data', args.experiment)
 
 # Build filename from command-line arguments.
-fname = '_'.join([str(args.n_hidden), str(args.n_train), str(args.seed), str(args.experiment), str(args.cut_acc_to_rsc), str(args.cut_atn_to_rsc), str(args.layer_A), str(args.eta), str(args.lambda_), str(args.delay)])
+fname = '_'.join([str(args.n_hidden), str(args.n_train), str(args.seed), str(args.experiment), str(args.cut_acc_to_rsc), str(args.cut_atn_to_rsc), str(args.layer_A), str(args.eta0), str(args.lambda_), str(args.delay)])
 for path in [logs_path, data_path, params_path, model_path]:
 	if not os.path.isdir(path):
 		os.makedirs(path)
@@ -149,7 +159,22 @@ elif args.experiment == 'one_zero_ab' and 'Spike' not in args.network:
 	if 'Memory' in args.network:
 		args.n_input = 2
 	model = eval(args.network)(args, device)
+	'''
+	first_recurrent_params = list(model.layer_ar.parameters()) + \
+		list(model.layer_ra.parameters()) + \
+		list(model.layer_a.parameters()) + \
+		list(model.layer_r.parameters())
+	other_params = list(model.layer_sr.parameters()) + \
+		list(model.layer_ma.parameters()) + \
+		list(model.layer_ao.parameters()) + \
+		list(model.layer_ro.parameters()) + \
+		list(model.layer_y.parameters())
+	optimizer = optim.Adam([{'params': first_recurrent_params, 'weight_decay': 0.01},
+				{'params': other_params, 'weight_decay': 0}], lr=args.lr)
 	optimizer = optim.Adam(model.parameters(), lr=args.lr)
+	'''
+	optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.01)
+	# scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.96)
 	loss_fun = lambda prediction, target : torch.sum(-target * F.log_softmax(prediction, -1), -1).mean()
 
 elif args.experiment == 'one_zero_ab_analyse' and 'Spike' not in args.network:
@@ -214,6 +239,9 @@ def train():
 				model.reset()
 				_tqdm.set_postfix(loss='{:.4f}, model={}'.format(loss, args.network))
 				_tqdm.update(1)
+			if 'scheduler' in globals():
+				print('sc')
+				scheduler.step()
 		total_correct = total_correct / (args.batch_size * len(train_data))
 
 		log('Training progress (%d/%d): Finish - Elapsed time: %.4f h' % (i+1, args.n_train, (timeit.default_timer() - start)/3600))
@@ -222,6 +250,7 @@ def train():
 		print('Save model ...')
 		torch.save(model.state_dict(), model_path + '/save.pt')
 
+counter = 0
 def test(i, model):
 	model.eval()
 	with torch.no_grad():
@@ -242,8 +271,15 @@ def test(i, model):
 
 		log('Test accuracy: %.4f\n' % (total_correct))
 
+		global counter
+		if total_correct >= 0.99:
+			counter += 1
+		if counter >= 10:
+			sys.exit()
+
 def analyse():
 	model.load_state_dict(torch.load(model_path + '/save.pt'))
+	# model.load_state_dict(torch.load('/home/jiashuncheng/code2/MANN2/results_20240301/a_20240229_seed1/model/save.pt'))
 	if args.mode == "analyse" and args.cut_acc_to_rsc:
 		model.layer_ao.w.data *= 0. # 切断ACC
 	if args.mode == "analyse" and args.cut_atn_to_rsc:
@@ -252,23 +288,31 @@ def analyse():
 	with torch.no_grad():
 		total_correct = 0
 		correct = 0
+		records = []
 		with tqdm(total=len(test_data), ncols=100) as _tqdm:
 			for idx, (image, target) in enumerate(test_data):
 				x_in, target = image.permute(1,0,2).to(device), target.to(device)
-				x_in = x_in + torch.normal(mean=args.mu, std=args.sigma, size=x_in.shape).to(device)
+				x_in_origin = x_in.clone()
+				# x_in = x_in + torch.normal(mean=args.mu, std=args.sigma, size=x_in.shape).to(device)
 				y_out = model('analyse', x_in, args.time)
 				predictions = torch.mean(y_out, dim=0)
 				correct = (predictions.argmax(1) == target.argmax(1)).float().sum()
-				correct = correct / args.batch_size
+				# correct = correct / args.batch_size
 				total_correct += (predictions.argmax(1) == target.argmax(1)).float().sum()
 				if args.mode == "analyse" and args.store_h_state:
-					with open('/home/jiashuncheng/code/MANN/plot/data/fixed_eta_h_todo9.pkl', 'wb') as a:
-						pickle.dump(model.neuron_o.h, a)
-						pickle.dump(target, a)
-					sys.exit()
-				model.reset()
+					# with open('/home/jiashuncheng/code/MANN/plot/data/fixed_eta_h_seed25.pkl', 'wb') as a:
+					#LINK - /home/jiashuncheng/code/MANN/plot/data/fixed_eta_h_seed25_20240325.pkl
+					# with open('/home/jiashuncheng/code2/MANN2/plot/data/test_20240828_{}.pkl'.format(args.sample), 'wb') as a: # 用于补充1~20的实验测试
+					records.append({"RSC": model.neuron_o.h, 
+								"ACC": model.neuron_a.h, 
+								"ATN": model.neuron_r.h,
+								"g": model.gs,
+								"acc": correct.cpu().numpy()})
+					model.reset()
 				_tqdm.update(1)
 		total_correct = total_correct / (args.batch_size * len(test_data))
+		with open('/home/jiashuncheng/liuchenghao/MANN/MANN2/plot/data2/test_eta/{}.pkl'.format(args.name_of_saved_file), 'wb') as a:
+			pickle.dump(records, a)
 
 		log('Analyse accuracy: %.4f\n' % (total_correct))
 
