@@ -9,4 +9,4 @@
 
 - Note:
 
-1. Copy the save_*.py file to the modelfolder and rename it to save.ptto run the inference model.
+1. Copy the `save_*.py' file to the modelfolder and rename it to `save.pt' to run the inference model.
