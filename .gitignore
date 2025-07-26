@@ -6,4 +6,4 @@
 !requirements.txt
 !*.png
 !launch.json
-!*.sh
+!.vscode
