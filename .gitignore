@@ -1,0 +1,7 @@
+*.*
+!*.gitignore
+!*.py
+!*.md
+!*.ipynb
+!requirements.txt
+!*.png
