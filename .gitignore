@@ -5,3 +5,5 @@
 !*.ipynb
 !requirements.txt
 !*.png
+!*.json
+!*.sh
