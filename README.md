@@ -7,6 +7,6 @@
 [2] FastWeight : <https://github.com/Victorwz/fast-weights-pytorch>
 
 
-- note:
+- Note:
 
-1. 
+1. Copy the save_*.py file to the modelfolder and rename it to save.ptto run the inference model.
