@@ -122,7 +122,7 @@ class SimpleMemoryNetwork_2024(nn.Module):
 		self.neuron_o.h = []
 
 		self.layer_sr = Synapses(self.n_input, self.n_hidden, init='xavier')
-		self.layer_ma = Synapses(self.n_input, self.n_hidden, init='xavier')
+		self.layer_ma = Synapses(self.n_input+1, self.n_hidden, init='xavier')
 		self.layer_ro = Synapses(self.n_hidden, self.n_hidden, init='xavier')
 		self.layer_ao = Synapses(self.n_hidden, self.n_hidden, init='xavier')
 		self.layer_ar = Synapses(self.n_hidden, self.n_hidden, init='xavier')
@@ -300,6 +300,11 @@ class SimpleMemoryNetwork_20241(nn.Module):
 			if timestep > self.sample: # 没有noise了，所以这里是不是0也都可以了
 				eta = 0
 			# print(A.max(), A.min())
+			if mode == 'analyse':
+				if timestep == 0:
+					eta = self.eta
+				else:
+					eta = eta * (1 - self.alpha_eta)#1/self.tau)
 			if self.layer_A:
 				A = self.lambda_ * A + eta * o.transpose(1,2) @ r.reshape(o.shape)
 			# A = A + 1e-6

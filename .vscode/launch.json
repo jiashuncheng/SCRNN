@@ -8,11 +8,12 @@
             "name": "Python 调试程序: 当前文件",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/zengshuxin/jiashuncheng/SCRNN/mysnn.py",
+            "program": "/home/dell/jiashuncheng/SCRNN/mysnn.py",
             "console": "integratedTerminal",
             "args":
             [
-                "--network", "SimpleMemoryNetwork_2024", "--layer_A", "--alpha_eta", "1", "--seed", "1314", "--mode", "analyse"
+                // "--network", "SimpleMemoryNetwork_2024", "--layer_A", "--alpha_eta", "0", "--seed", "5", "--mode", "train", "--experiment", "one_zero_ab", "--lr", "5e-4", "--gpu", "0", "--eta", "-20", "--sample", "20", "--delay", "10"
+                "--network", "SimpleMemoryNetwork_2024", "--layer_A", "--alpha_eta", "0.0", "--seed", "34", "--mode", "analyse", "--experiment", "one_zero_ab", "--lr", "1e-3", "--gpu", "0", "--eta", "-20", "--sample", "20", "--delay", "10", "--model_path", "/home/dell/jiashuncheng/SCRNN/20251002/save_20251002224056.pt"
             ]
         }
     ]

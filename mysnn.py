@@ -19,6 +19,9 @@ sys.path.insert(0,'{}'.format(os.path.abspath(os.path.join(os.path.dirname(__fil
 from network import *
 from datasets import *
 
+from datetime import datetime
+now = datetime.now().strftime('%Y%m%d%H%M%S')
+
 def log(info):
 	logging.info(info)
 	print(info)
@@ -53,14 +56,14 @@ parser.add_argument('--n_trials', type=int, help='Number of dataset samples.', d
 # one_zero task
 parser.add_argument('--analyse_pre', type=int, default=0)
 parser.add_argument('--sample', type=int, default=20)
-parser.add_argument('--delay', type=int, default=100)
+parser.add_argument('--delay', type=int, default=10)
 parser.add_argument('--decision', type=int, default=1)
 parser.add_argument('--repeat', type=int, default=1)
 parser.add_argument('--prop', type=float, default=0.5)
 parser.add_argument('--prop_0_a', type=float, default=0.8)
 parser.add_argument('--prop_1_a', type=float, default=0.4)
 parser.add_argument('--mu', type=float, default=0.)
-parser.add_argument('--sigma', type=float, default=0.6)
+parser.add_argument('--sigma', type=float, default=0.05)
 
 # analyse
 parser.add_argument('--store_h_state', action='store_true')
@@ -79,6 +82,7 @@ parser.add_argument('--wg', type=float, default=0.1)
 parser.add_argument('--rc', type=float, default=-1.)
 parser.add_argument('--tau', type=float, default=0.6)
 parser.add_argument('--alpha_eta', type=float, default=0.6)
+parser.add_argument('--model_path', type=str, default='')
 
 
 # Place parsed arguments in local scope.
@@ -207,14 +211,15 @@ model = model.to(device)
 print('Optional argument values:')
 for key, value in vars(args).items():
 	print('--', key, ':', value)
-with open(os.path.join(params_path, '_'.join(['params', fname]) + '.json'), 'w') as f:
+# with open(os.path.join(params_path, '_'.join(['params', fname]) + '.json'), 'w') as f:
+with open(os.path.join(params_path, '_'.join(['params', now]) + '.json'), 'w') as f:
 	params = json.dumps(vars(args), ensure_ascii=False, indent=2)
 	f.write(params)
 	f.close()
  
 # Set logging configuration.
 logging.basicConfig(format='%(message)s', 
-					filename=os.path.join(logs_path, '%s.log' % fname),
+					filename=os.path.join(logs_path, '%s.log' % now),
 					level=logging.DEBUG,
 					filemode='w')
 
@@ -250,7 +255,7 @@ def train():
 		log('Current training total accuracy: %.4f' % (total_correct))
 		test(i, model)
 		print('Save model ...')
-		torch.save(model.state_dict(), model_path + '/save.pt')
+		torch.save(model.state_dict(), model_path + f'/save_{now}.pt')
 
 counter = 0
 def test(i, model):
@@ -276,12 +281,12 @@ def test(i, model):
 		global counter
 		if total_correct >= 0.99:
 			counter += 1
-		if counter >= 10:
+		if counter >= 5:
 			sys.exit()
 
 def analyse():
-	model.load_state_dict(torch.load(model_path + '/save.pt'))
-	# model.load_state_dict(torch.load('/home/jiashuncheng/code2/MANN2/results_20240301/a_20240229_seed1/model/save.pt'))
+	# model.load_state_dict(torch.load(model_path + '/save.pt'))
+	model.load_state_dict(torch.load(args.model_path))
 	if args.mode == "analyse" and args.cut_acc_to_rsc:
 		model.layer_ao.w.data *= 0. # 切断ACC
 	if args.mode == "analyse" and args.cut_atn_to_rsc:
