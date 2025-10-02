@@ -1,8 +1,5 @@
 # SCRNN
 
-- Note:
-
-1. Copy the `save_*.py` file to the `results/eth/model` folder and rename it to `save.pt` to run the inference model.
 
 ## References
 
